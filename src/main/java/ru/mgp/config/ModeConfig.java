@@ -61,7 +61,8 @@ public final class ModeConfig {
         this.mapVoteType = Cfg.enumValue(VoteType.class, y.getString("map-vote.type"), VoteType.MOST_VOTES);
         this.mapVoteOptions = y.getInt("map-vote.options", 0);
         this.naturalMobs = y.getBoolean("natural-mobs", false);
-        this.defaultKit = y.getString("default-kit");
+        String dk = y.getString("default-kit");
+        this.defaultKit = dk == null || dk.isBlank() ? null : dk.trim();
         this.winActions = y.getStringList("win-actions");
 
         ConfigurationSection gr = y.getConfigurationSection("gamerules");

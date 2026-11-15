@@ -578,16 +578,18 @@ function sourceCard(d) {
     const [x1, y1, z1] = String(src.min).split(/\s+/), [x2, y2, z2] = String(src.max).split(/\s+/);
     btn.disabled = true; btn.textContent = 'Вырезаю...';
     try {
-      const r = await api('POST', 'import', { map: id, mode: d.mode, world: src.world, x1, y1, z1, x2, y2, z2, detectChests: chests });
+      const r = await api('POST', 'import', { map: id, mode: d.mode, world: src.world, x1, y1, z1, x2, y2, z2, detectChests: chests, optimize: optimize.checked });
       S.dirty = false; toast('Шаблон пересоздан: ' + r.summary); route();
     } catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Пересоздать шаблон из мира'; }
   } }, 'Пересоздать шаблон из мира');
+  const optimize = h('input', { type: 'checkbox', checked: src.optimized !== false });
   return card('Источник', h('p', null, `Мир `, h('b', null, src.world), `, область `, h('code', null, src.min), ' — ', h('code', null, src.max)),
-    h('p', { class: 'muted' }, 'Если поменял карту в исходном мире, пересоздай шаблон. Спавны и настройки сохранятся.'), btn);
+    h('p', { class: 'muted' }, 'Если поменял карту в исходном мире, пересоздай шаблон. Спавны и настройки сохранятся.'),
+    h('label', { class: 'field check', style: 'margin-bottom:10px' }, optimize, 'Оптимизация границ: обрезать края, где только воздух'), btn);
 }
 
 function pageImport(main) {
-  const f = { map: '', mode: S.meta.modes[0] || '', world: S.meta.worlds[0] || '', name: '', x1: '', y1: '', z1: '', x2: '', y2: '', z2: '', detectChests: true };
+  const f = { map: '', mode: S.meta.modes[0] || '', world: S.meta.worlds[0] || '', name: '', x1: '', y1: '', z1: '', x2: '', y2: '', z2: '', detectChests: true, optimize: true };
   const inp = (k, ph, attrs) => h('input', { value: f[k], placeholder: ph, ...attrs, oninput: (e) => { f[k] = e.target.value; } });
   const sel = (k, opts) => { const el = h('select', { onchange: (e) => { f[k] = e.target.value; } }, opts.map((o) => h('option', { value: o }, o))); el.value = f[k]; return el; };
   const out = h('div');
@@ -620,6 +622,9 @@ function pageImport(main) {
         fld('Угол 2: X', inp('x2', 'x', { type: 'number' })), fld('Угол 2: Y', inp('y2', 'y', { type: 'number' })), fld('Угол 2: Z', inp('z2', 'z', { type: 'number' }))),
       h('label', { class: 'field check', style: 'margin-top:12px' },
         h('input', { type: 'checkbox', checked: true, onchange: (e) => { f.detectChests = e.target.checked; } }), 'Найти сундуки в области'),
+      h('label', { class: 'field check', style: 'margin-top:6px' },
+        h('input', { type: 'checkbox', checked: true, onchange: (e) => { f.optimize = e.target.checked; } }),
+        'Оптимизация границ: обрезать края области, где только воздух (можно выделять с запасом)'),
       h('div', { style: 'margin-top:12px' }, go)),
     out));
 }

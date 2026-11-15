@@ -26,6 +26,7 @@ public final class PlayerUtil {
         p.setItemOnCursor(null);
         p.setGameMode(mode);
         AttributeInstance max = p.getAttribute(Attribute.MAX_HEALTH);
+        if (max != null) max.setBaseValue(20.0); // сброс max-health из модификаторов режима
         p.setHealth(max != null ? max.getValue() : 20.0);
         p.setFoodLevel(20);
         p.setSaturation(5f);

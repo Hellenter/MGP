@@ -282,9 +282,10 @@ public final class PanelServer {
             Pos p2 = new Pos(num(b, "x2"), num(b, "y2"), num(b, "z2"), 0, 0);
             String name = b.has("name") && !b.get("name").isJsonNull() && !b.get("name").getAsString().isBlank() ? b.get("name").getAsString() : null;
             boolean chests = !b.has("detectChests") || b.get("detectChests").getAsBoolean();
-            int margin = b.has("margin") ? b.get("margin").getAsInt() : plugin.getConfig().getInt("import.margin-chunks", 0);
+            int margin = b.has("margin") ? b.get("margin").getAsInt() : plugin.getConfig().getInt("import.margin-chunks", 1);
+            boolean trim = b.has("optimize") ? b.get("optimize").getAsBoolean() : plugin.getConfig().getBoolean("import.optimize-borders", true);
             return plugin.importer().run(new MapImporter.Request(w, id(str(b, "map")), str(b, "mode").toLowerCase(Locale.ROOT),
-                    Region.of(p1, p2), name, chests, Math.max(0, Math.min(4, margin))));
+                    Region.of(p1, p2), name, chests, Math.max(0, Math.min(4, margin)), false, trim));
         };
         CompletableFuture<MapImporter.Result> f;
         try {
@@ -296,7 +297,7 @@ public final class PanelServer {
         try {
             MapImporter.Result r = f.get(10, TimeUnit.MINUTES);
             return Json.obj("ok", true, "map", r.mapId(), "chunks", r.chunks(), "bytes", r.bytes(), "chests", r.chests(),
-                    "created", r.created(), "summary", r.summary());
+                    "created", r.created(), "summary", r.summary(), "trimmed", r.trimmed());
         } catch (ExecutionException e) {
             throw new ApiException(400, String.valueOf(e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
         }

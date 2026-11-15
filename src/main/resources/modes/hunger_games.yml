@@ -7,7 +7,7 @@ description:
   - "<gray>и останься последним выжившим!"
 
 min-players: 2
-max-players: 12                    # не больше, чем спавнов на картах
+max-players: 8                     # не больше, чем спавнов на картах
 max-sessions: 4                    # сколько игр этого режима может идти одновременно
 countdown: 60                      # отсчёт, когда набралось min-players
 fast-countdown: 10                 # ускоренный старт, когда лобби заполнено
@@ -50,35 +50,11 @@ modifiers:
       clear: { display: "<yellow>Ясно",   weight: 6, actions: ["weather: clear"] }
       rain:  { display: "<aqua>Дождь",    weight: 2, actions: ["weather: rain"] }
       storm: { display: "<dark_aqua>Гроза", weight: 1, actions: ["weather: thunder"] }
-  health:
-    display: "<red>Здоровье"
-    icon: GOLDEN_APPLE
-    selection: OFF                 # поставь VOTE, чтобы голосовать (WEIGHTED: голоса добавляют шанс)
-    vote-type: WEIGHTED
-    options:
-      normal: { display: "<white>Обычное", weight: 5, actions: [] }
-      double: { display: "<red>Двойное (20 сердец)", weight: 1, actions: ["max-health: 40"] }
-      speed:  { display: "<aqua>Скорость", weight: 1, actions: ["effect: speed 0"] }
 
 # ---------- Наборы ----------
-default-kit: none
-kits:
-  none:
-    display: "<gray>Без набора"
-    icon: BARRIER
-    items: []
-  archer:
-    display: "<green>Лучник"
-    icon: BOW
-    description: ["<gray>Лук и 10 стрел"]
-    items: ["BOW", "ARROW 10"]
-  knight:
-    display: "<aqua>Рыцарь"
-    icon: IRON_CHESTPLATE
-    permission: mgp.kit.knight     # можно продавать/выдавать за донат
-    description: ["<gray>Железный нагрудник"]
-    items:
-      - { material: IRON_CHESTPLATE, slot: chest }
+default-kit: ""
+kits: {}                           # наборов в голодных играх нет
+
 start-items: []                    # предметы, которые получают все
 
 # ---------- Сундуки по тирам ----------
@@ -234,7 +210,7 @@ sidebar:
 # ---------- Настройки самого режима ----------
 settings:
   freeze: 10                       # сек. стоим на спавнах перед стартом
-  grace-period: 30                 # сек. без PvP после старта
+  grace-period: 30                 # сек. без PvP после окончания заморозки на спавнах
   allow-place: true
   # Что игрокам можно ломать. Имя блока (COBWEB), шаблон (*_VINES) или тег ванилы (#leaves).
   # #sword_efficient — листва, лианы, цветы, ростки; #replaceable — трава, папоротник, сухой куст, снег.

@@ -32,5 +32,17 @@ public final class HubService {
         p.teleport(location());
         Hotbar.giveHub(p);
         plugin.visibility().refresh(p);
+        // После перехода в другой мир клиент может «вернуть» старые эффекты/режим: чистим ещё раз чуть позже.
+        org.bukkit.Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!p.isOnline() || plugin.sessions().of(p) != null) return;
+            for (org.bukkit.potion.PotionEffect e : p.getActivePotionEffects()) p.removePotionEffect(e.getType());
+            p.setFireTicks(0);
+            org.bukkit.attribute.AttributeInstance max = p.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH);
+            if (max != null) {
+                max.setBaseValue(20.0); // max-health из режима меняет базовое значение
+                p.setHealth(Math.min(p.getHealth(), max.getValue()));
+            }
+            PlayerUtil.resyncGameMode(p);
+        }, 3L);
     }
 }
