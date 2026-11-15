@@ -19,6 +19,21 @@ hub:
       - "<dark_gray>────────────"
       - "<yellow>play.myserver.ru"
 
+# Другие серверы сети. Переход — ванильным пакетом transfer (Minecraft 1.20.5+), прокси не нужен.
+# На целевом сервере в server.properties должно быть accepts-transfers=true.
+# Команды: /server <id>, /smp. Предмет в хотбаре хаба (hotbar-slot 1-8, -1 — без предмета) и пункт в меню игр.
+servers:
+  smp:
+    enabled: true
+    name: "<green><bold>Выживание SMP"
+    icon: GRASS_BLOCK
+    host: ""                   # адрес SMP так, как его вводят в списке серверов (например play.myserver.ru)
+    port: 25566
+    hotbar-slot: 4
+    description:
+      - "<gray>Хардкорное выживание с модом <gold>EAM"
+      - "<red>Нужен клиент Fabric 26.3 с модом EAM"
+
 # Параметры типа голосования WEIGHTED (голоса добавляют шанс):
 # вес варианта = weight_варианта * base + голоса * per-vote
 voting:

@@ -59,6 +59,8 @@ public final class PlayerListener implements Listener {
             case Hotbar.AGAIN -> { if (s != null) plugin.sessions().join(p, s.mode.id); }
             default -> {
                 if (tag.startsWith("logic:") && s != null && s.isPlaying()) s.logic().onHotbar(p, tag.substring(6));
+                else if (tag.startsWith(ru.mgp.network.LinkedServers.TAG_PREFIX))
+                    plugin.servers().transfer(p, tag.substring(ru.mgp.network.LinkedServers.TAG_PREFIX.length()));
             }
         }
     }
