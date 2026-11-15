@@ -51,7 +51,7 @@ public final class WorldService {
     public CompletableFuture<World> create(String template, String worldName) {
         CompletableFuture<World> result = new CompletableFuture<>();
         Path src = templatesDir.resolve(template);
-        Path dst = Bukkit.getWorldContainer().toPath().resolve(worldName);
+        Path dst = dimensionDir(worldName);
         if (!Files.isDirectory(src)) {
             result.completeExceptionally(new IOException("Шаблон не найден: " + src));
             return result;
@@ -59,7 +59,8 @@ public final class WorldService {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 FileUtil.deleteRecursive(dst);
-                FileUtil.copyWorld(src, dst);
+                // В шаблоне регионы могут лежать в корне (наш формат) или внутри старой/новой структуры мира.
+                FileUtil.copyWorld(RegionCutter.findOverworldDir(src), dst);
             } catch (IOException e) {
                 Bukkit.getScheduler().runTask(plugin, () -> result.completeExceptionally(e));
                 return;
@@ -72,6 +73,10 @@ public final class WorldService {
                             .createWorld();
                     if (w == null) throw new IllegalStateException("createWorld вернул null");
                     w.setAutoSave(false);
+                    if (!w.getWorldFolder().toPath().toAbsolutePath().normalize().equals(dst.toAbsolutePath().normalize())) {
+                        plugin.getLogger().warning("Мир " + worldName + " загружен из " + w.getWorldFolder() + ", а шаблон скопирован в " + dst
+                                + " — карта может оказаться пустой. Сообщи разработчику плагина.");
+                    }
                     result.complete(w);
                 } catch (Throwable t) {
                     result.completeExceptionally(t);
@@ -87,7 +92,7 @@ public final class WorldService {
      */
     public CompletableFuture<World> createPlatform(String worldName, ru.mgp.util.Pos spawn) {
         try {
-            FileUtil.deleteRecursive(Bukkit.getWorldContainer().toPath().resolve(worldName));
+            FileUtil.deleteRecursive(dimensionDir(worldName));
             World w = new WorldCreator(worldName).generator(new VoidGenerator()).generateStructures(false).createWorld();
             if (w == null) throw new IllegalStateException("createWorld вернул null");
             w.setAutoSave(false);
@@ -130,14 +135,27 @@ public final class WorldService {
         }
     }
 
-    /** Удаляет копии миров, оставшиеся после падения/рестарта сервера. */
+    /**
+     * Папка мира с ключом minecraft:<имя>. С версии 26.1 все миры хранятся как измерения основного:
+     * world/dimensions/minecraft/<имя>/{region,entities,poi,data}.
+     */
+    public static Path dimensionDir(String worldName) {
+        return Bukkit.getServer().getLevelDirectory().resolve("dimensions").resolve("minecraft")
+                .resolve(worldName.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** Удаляет копии миров, оставшиеся после падения/рестарта сервера (и папки в корне сервера от версий до 0.3.4). */
     public void cleanupLeftovers() {
-        File[] dirs = Bukkit.getWorldContainer().listFiles(f -> f.isDirectory() && f.getName().startsWith(PREFIX));
-        if (dirs == null) return;
+        java.util.List<File> dirs = new java.util.ArrayList<>();
+        File[] a = Bukkit.getWorldContainer().listFiles(f -> f.isDirectory() && f.getName().startsWith(PREFIX));
+        File[] b = dimensionDir(PREFIX + "x").getParent().toFile().listFiles(f -> f.isDirectory() && f.getName().startsWith(PREFIX));
+        if (a != null) dirs.addAll(java.util.List.of(a));
+        if (b != null) dirs.addAll(java.util.List.of(b));
         for (File d : dirs) {
-            if (Bukkit.getWorld(d.getName()) != null) continue;
+            World loaded = Bukkit.getWorld(d.getName());
+            if (loaded != null && !Bukkit.unloadWorld(loaded, false)) continue; // при старте сессий ещё нет
             delete(d.toPath());
-            plugin.getLogger().info("Удалён старый игровой мир " + d.getName());
+            plugin.getLogger().info("Удалён старый игровой мир " + d);
         }
     }
 

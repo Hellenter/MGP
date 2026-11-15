@@ -7,7 +7,8 @@ import java.util.Set;
 
 public final class FileUtil {
     /** Файлы/папки, которые нельзя копировать между мирами (дубли UID ломают загрузку). */
-    private static final Set<String> SKIP = Set.of("uid.dat", "session.lock", "playerdata", "advancements", "stats");
+    private static final Set<String> SKIP = Set.of("uid.dat", "session.lock", "playerdata", "players", "advancements", "stats",
+            "metadata.dat", "DIM-1", "DIM1", "dimensions", "datapacks");
 
     private FileUtil() {}
 
