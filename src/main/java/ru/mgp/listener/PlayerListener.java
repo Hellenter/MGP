@@ -82,6 +82,24 @@ public final class PlayerListener implements Listener {
         if (Keys.tag(e.getMainHandItem()) != null || Keys.tag(e.getOffHandItem()) != null) e.setCancelled(true);
     }
 
+    /**
+     * Админ в хабе перешёл в креатив — убираем предметы режимов, чтобы не мешали строить.
+     * Вернулся из креатива — выдаём их снова (если не выключены через /mgp hotbar off).
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onGameMode(PlayerGameModeChangeEvent e) {
+        Player p = e.getPlayer();
+        if (plugin.sessions().of(p) != null) return;
+        org.bukkit.GameMode to = e.getNewGameMode(), from = p.getGameMode();
+        if (to == org.bukkit.GameMode.CREATIVE) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> { if (p.isOnline() && p.getGameMode() == to) Hotbar.clearTagged(p); });
+        } else if (from == org.bukkit.GameMode.CREATIVE && p.getWorld().equals(plugin.hub().world())) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (p.isOnline() && plugin.sessions().of(p) == null && p.getGameMode() != org.bukkit.GameMode.CREATIVE) Hotbar.giveHub(p);
+            });
+        }
+    }
+
     // ------------------------------------------------------------- чат по комнатам
 
     @EventHandler(ignoreCancelled = true)

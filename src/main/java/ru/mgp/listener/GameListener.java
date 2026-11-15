@@ -50,7 +50,7 @@ public final class GameListener implements Listener {
             e.setCancelled(true);
             if (e.getCause() == EntityDamageEvent.DamageCause.VOID) {
                 if (s.isPlaying() || s.state() == GameSession.State.ENDING) p.teleport(s.spectatorLocation());
-                else if (s.waitingWorld() != null) p.teleport(s.mode.waitingSpawn.toLocation(s.waitingWorld()));
+                else if (s.waitingWorld() != null) p.teleport(s.waitingSpawn().toLocation(s.waitingWorld()));
             }
             return;
         }
@@ -143,8 +143,8 @@ public final class GameListener implements Listener {
         if (s == null) return;
         if (active(s, p)) {
             s.logic().onMove(e);
-        } else if (s.waitingWorld() != null && p.getWorld().equals(s.waitingWorld()) && e.getTo().getY() < s.mode.voidY) {
-            e.setTo(s.mode.waitingSpawn.toLocation(s.waitingWorld()));
+        } else if (s.waitingWorld() != null && p.getWorld().equals(s.waitingWorld()) && e.getTo().getY() < s.waitingVoidY()) {
+            e.setTo(s.waitingSpawn().toLocation(s.waitingWorld()));
         }
     }
 

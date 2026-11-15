@@ -372,6 +372,7 @@ public final class PanelServer {
         o.add("effects", Json.strings(reg.getRegistry(RegistryKey.MOB_EFFECT).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         o.add("enchantments", Json.strings(reg.getRegistry(RegistryKey.ENCHANTMENT).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         o.add("professions", Json.strings(reg.getRegistry(RegistryKey.VILLAGER_PROFESSION).keyStream().map(NamespacedKey::getKey).sorted().toList()));
+        o.add("biomes", Json.strings(ru.mgp.world.WorldService.biomeIds()));
         o.add("gamerules", Json.strings(reg.getRegistry(RegistryKey.GAME_RULE).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         return o;
     }

@@ -30,6 +30,10 @@ public final class MapConfig {
     public final List<Pos> spawns = new ArrayList<>();
     public final Pos spectator;
     public final Pos center;
+    /** Биом для всей карты (id, например plains или minecraft:snowy_plains); null — как в шаблоне. */
+    public final String biome;
+    /** Геймрулы только для этой карты (поверх общих и режима). */
+    public final java.util.Map<String, String> gamerules = new java.util.LinkedHashMap<>();
     public final double borderSize;
     public final List<ChestSpot> chests = new ArrayList<>();
     public final List<TraderSpot> traders = new ArrayList<>();
@@ -49,6 +53,10 @@ public final class MapConfig {
         for (String s : y.getStringList("spawns")) spawns.add(Pos.parse(s));
         this.spectator = Pos.parse(y.getString("spectator"));
         this.center = Pos.parse(y.getString("center"));
+        String bi = y.getString("biome");
+        this.biome = bi == null || bi.isBlank() || bi.equalsIgnoreCase("none") ? null : bi.trim().toLowerCase(java.util.Locale.ROOT);
+        org.bukkit.configuration.ConfigurationSection gr = y.getConfigurationSection("gamerules");
+        if (gr != null) for (String k : gr.getKeys(false)) gamerules.put(k, String.valueOf(gr.get(k)));
         this.borderSize = y.getDouble("border-size", 0);
         // "x y z tier"
         for (String s : y.getStringList("chests")) {

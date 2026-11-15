@@ -92,6 +92,18 @@ public final class MgpCommand implements TabExecutor {
                 Msg.send(p, "<green>Спавн хаба: " + p.getWorld().getName() + " " + pos.serialize() + ". Сюда попадают при входе, после игры и по /hub.");
             }
             case "rename" -> { if (admin(sender)) renameMap(sender, a); }
+            case "hotbar" -> {
+                if (!admin(sender) || !(sender instanceof Player p)) return true;
+                boolean hide = a.length > 1 ? a[1].equalsIgnoreCase("off") : !ru.mgp.ui.Hotbar.hubHidden(p);
+                ru.mgp.ui.Hotbar.setHubHidden(p, hide);
+                if (hide) {
+                    ru.mgp.ui.Hotbar.clearTagged(p);
+                    Msg.send(p, "<green>Предметы хаба выключены для тебя (и после перезахода). Вернуть: /mgp hotbar on");
+                } else {
+                    if (plugin.sessions().of(p) == null) ru.mgp.ui.Hotbar.giveHub(p);
+                    Msg.send(p, "<green>Предметы хаба снова включены." + (p.getGameMode() == org.bukkit.GameMode.CREATIVE ? " <gray>В креативе их нет — появятся, когда выйдешь из него." : ""));
+                }
+            }
             case "optimize" -> {
                 if (!admin(sender)) return true;
                 try { optimizeMap(sender, a); } catch (IllegalArgumentException e) { Msg.send(sender, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
@@ -167,6 +179,7 @@ public final class MgpCommand implements TabExecutor {
         Msg.send(s, "<yellow>/leave</yellow> — выйти в лобби");
         if (s.hasPermission("mgp.admin")) {
             Msg.send(s, "<gold>/mgp start | list | reload | panel");
+            Msg.send(s, "<gold>/mgp hotbar [on|off]</gold> — предметы хаба (выбор игры, серверы) у себя; в креативе их нет автоматически");
             Msg.send(s, "<gold>/mgp sethub</gold> — спавн хаба там, где ты стоишь (с поворотом головы)");
             Msg.send(s, "<gold>/mgp setup</gold> — список команд настройки карт");
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
@@ -201,6 +214,8 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
                     "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
+                    "<yellow>/mgp setup lobby default</yellow> — общее лобби ожидания для всех режимов без своего",
+                    "<yellow>/mgp setup biome <карта> <биом|none></yellow> — биом на всю карту",
                     "<yellow>/mgp setup info <карта>")) Msg.send(p, line);
             return;
         }
@@ -265,6 +280,14 @@ public final class MgpCommand implements TabExecutor {
                 }
                 case "optimize" -> optimizeMap(p, a);
                 case "rename" -> renameMap(p, a);
+                case "biome" -> {
+                    need(a, 3);
+                    String b = a[2].toLowerCase(Locale.ROOT);
+                    boolean none = b.equals("none") || b.equals("off");
+                    if (!none && ru.mgp.world.WorldService.biome(b) == null) { Msg.send(p, "<red>Нет биома " + Msg.esc(a[2]) + ". Подсказки — по Tab."); return; }
+                    edit(p, a, 3, y -> y.set("biome", none ? null : b),
+                            none ? "Биом карты убран — будет как в шаблоне" : "Биом карты: " + b + " (со следующей игры)");
+                }
                 case "plot" -> {
                     Pos[] sel = selection(p);
                     if (sel == null) return;
@@ -383,6 +406,7 @@ public final class MgpCommand implements TabExecutor {
     /** /mgp setup lobby <режим>: область pos1/pos2 -> templates/<шаблон лобби>, waiting.spawn = позиция игрока. */
     private void setupLobby(Player p, String[] a) {
         need(a, 2);
+        if (a[1].equalsIgnoreCase("default")) { setupDefaultLobby(p); return; }
         ModeConfig mode = plugin.registry().mode(a[1]);
         if (mode == null) { Msg.send(p, "<red>Нет режима " + Msg.esc(a[1])); return; }
         Pos[] sel = selection(p);
@@ -407,6 +431,35 @@ public final class MgpCommand implements TabExecutor {
             save(m.yaml, m.file);
             plugin.registry().reloadMode(m.id);
             Msg.send(p, "<green>Лобби ожидания для " + m.id + " готово: " + r.chunks() + " чанков, спавн " + spawn + ". Новые игры уже будут в нём.");
+        });
+    }
+
+    /** /mgp setup lobby default: общее лобби ожидания для всех режимов, у которых нет своего. */
+    private void setupDefaultLobby(Player p) {
+        Pos[] sel = selection(p);
+        if (sel == null) return;
+        String selWorld = posWorld.get(p.getUniqueId());
+        if (selWorld != null && !selWorld.equals(p.getWorld().getName())) { Msg.send(p, "<red>pos1/pos2 заданы в другом мире."); return; }
+        ru.mgp.util.Region box = ru.mgp.util.Region.of(sel[0], sel[1]);
+        Location loc = p.getLocation();
+        if (!box.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) {
+            Msg.send(p, "<red>Встань внутри выделенной области — твоя позиция станет точкой появления в лобби.");
+            return;
+        }
+        String template = plugin.getConfig().getString("default-lobby.template", "waiting_lobby");
+        if (!template.matches("[a-z0-9_]{1,32}")) template = "waiting_lobby";
+        String tpl = template, spawn = Pos.of(loc).serialize();
+        Msg.send(p, "<gray>Вырезаю общее лобби ожидания в templates/" + tpl + "...");
+        plugin.importer().run(new ru.mgp.world.MapImporter.Request(p.getWorld(), tpl, "default", box, null, false, 0, true, optimizeBorders())).whenComplete((r, ex) -> {
+            if (ex != null) { Msg.send(p, "<red>Ошибка: " + Msg.esc(String.valueOf(ex.getMessage()))); return; }
+            plugin.getConfig().set("default-lobby.template", tpl);
+            plugin.getConfig().set("default-lobby.spawn", spawn);
+            plugin.getConfig().set("default-lobby.void-y", r.box().minY() - 5);
+            plugin.saveConfig();
+            List<String> own = new ArrayList<>();
+            for (ModeConfig m : plugin.registry().modes()) if (plugin.worlds().templateExists(m.waitingTemplate) && !m.waitingTemplate.equals(tpl)) own.add(m.id);
+            Msg.send(p, "<green>Общее лобби готово: " + r.chunks() + " чанков, спавн " + spawn + ". Его получают все режимы без своего лобби.");
+            if (!own.isEmpty()) Msg.send(p, "<gray>Со своим лобби (оно важнее общего): " + String.join(", ", own));
         });
     }
 
@@ -574,7 +627,9 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "debug"));
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
+                out.addAll(List.of("on", "off"));
             } else if (a.length == 2 && (a[0].equalsIgnoreCase("optimize") || a[0].equalsIgnoreCase("rename"))) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("import")) {
@@ -585,11 +640,15 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "plot", "trigger", "waiting", "lobby", "info"));
+                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "biome", "plot", "trigger", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
+                if (a[1].equalsIgnoreCase("lobby")) out.add("default");
                 else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))
                     plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("biome")) {
+                out.add("none");
+                out.addAll(ru.mgp.world.WorldService.biomeIds());
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("create")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("delspawn")) {

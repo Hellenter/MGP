@@ -14,8 +14,29 @@ public final class Hotbar {
 
     private Hotbar() {}
 
+    private static final org.bukkit.NamespacedKey HIDDEN = new org.bukkit.NamespacedKey("mgp", "hub_hotbar_off");
+
+    /** Админ выключил себе предметы хаба (/mgp hotbar off) — сохраняется в данных игрока. */
+    public static boolean hubHidden(Player p) {
+        return p.getPersistentDataContainer().has(HIDDEN, org.bukkit.persistence.PersistentDataType.BYTE);
+    }
+
+    public static void setHubHidden(Player p, boolean hidden) {
+        if (hidden) p.getPersistentDataContainer().set(HIDDEN, org.bukkit.persistence.PersistentDataType.BYTE, (byte) 1);
+        else p.getPersistentDataContainer().remove(HIDDEN);
+    }
+
+    /** Убирает из инвентаря все служебные предметы плагина (компас выбора игры, серверы и т.п.). */
+    public static void clearTagged(Player p) {
+        PlayerInventory inv = p.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) if (ru.mgp.util.Keys.tag(inv.getItem(i)) != null) inv.setItem(i, null);
+        if (ru.mgp.util.Keys.tag(p.getItemOnCursor()) != null) p.setItemOnCursor(null);
+    }
+
     public static void giveHub(Player p) {
         PlayerInventory inv = p.getInventory();
+        // в креативе (стройка) и с выключенным хотбаром предметы режимов не мешают
+        if (hubHidden(p) || p.getGameMode() == org.bukkit.GameMode.CREATIVE) return;
         inv.setItem(0, tagged(Material.COMPASS, "<green><bold>Выбор игры</bold> <gray>(ПКМ)", SELECTOR));
         for (LinkedServers.Server s : MGPPlugin.getPlugin(MGPPlugin.class).servers().all()) {
             if (s.hotbarSlot() < 1 || s.hotbarSlot() > 8) continue;

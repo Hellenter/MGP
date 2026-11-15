@@ -101,15 +101,32 @@ public final class GameSession {
 
     public void addVote(Vote v) { votes.put(v.key, v); }
 
+    private Pos waitingSpawn;
+    private double waitingVoidY;
+
+    /** Точка появления в лобби ожидания этой сессии (своё лобби режима, общее лобби или временная площадка). */
+    public Pos waitingSpawn() { return waitingSpawn; }
+    public double waitingVoidY() { return waitingVoidY; }
+
     /** Запускает подготовку мира ожидания. */
     public void create() {
         String wName = WorldService.PREFIX + mode.id + "_w" + id;
         java.util.concurrent.CompletableFuture<World> wf;
-        if (plugin.worlds().templateExists(mode.waitingTemplate)) {
+        org.bukkit.configuration.file.FileConfiguration cfg = plugin.getConfig();
+        String common = cfg.getString("default-lobby.template", "waiting_lobby");
+        Pos commonSpawn = Pos.parse(cfg.getString("default-lobby.spawn"));
+        waitingSpawn = mode.waitingSpawn;
+        waitingVoidY = mode.voidY;
+        if (!mode.waitingTemplate.equals(common) && plugin.worlds().templateExists(mode.waitingTemplate)) {
+            // своё лобби режима важнее общего
             wf = plugin.worlds().create(mode.waitingTemplate, wName);
+        } else if (plugin.worlds().templateExists(common) && commonSpawn != null) {
+            waitingSpawn = commonSpawn;
+            waitingVoidY = cfg.getDouble("default-lobby.void-y", 0);
+            wf = plugin.worlds().create(common, wName);
         } else {
-            plugin.getLogger().warning("Нет шаблона лобби ожидания templates/" + mode.waitingTemplate + " для режима " + mode.id
-                    + " — использую временную площадку. Своё лобби: /mgp setup export " + mode.waitingTemplate + " (стоя в мире лобби)");
+            plugin.getLogger().warning("Нет лобби ожидания для режима " + mode.id + " (templates/" + mode.waitingTemplate
+                    + ") и общего лобби — использую временную площадку. Общее лобби: выдели pos1/pos2 и /mgp setup lobby default");
             wf = plugin.worlds().createPlatform(wName, mode.waitingSpawn);
         }
         wf.whenComplete((w, ex) -> {
@@ -124,7 +141,7 @@ public final class GameSession {
                 return;
             }
             waitingWorld = w;
-            plugin.worlds().applyGamerules(w, mode.gamerules);
+            plugin.worlds().applyWorldRules(w, mode.gamerules);
             state = State.WAITING;
             for (Player p : online()) sendToWaiting(p);
             checkStart();
@@ -153,7 +170,7 @@ public final class GameSession {
 
     private void sendToWaiting(Player p) {
         PlayerUtil.reset(p, GameMode.ADVENTURE);
-        p.teleport(mode.waitingSpawn.toLocation(waitingWorld));
+        p.teleport(waitingSpawn.toLocation(waitingWorld));
         Hotbar.giveWaiting(p, this);
         plugin.visibility().refresh(p);
     }
@@ -301,7 +318,8 @@ public final class GameSession {
     // ------------------------------------------------------------------ игра
 
     private void prepareGameWorld() {
-        plugin.worlds().applyGamerules(gameWorld, mode.gamerules);
+        plugin.worlds().applyWorldRules(gameWorld, mode.gamerules, map.gamerules);
+        applyMapBiome();
         if (map.center != null) {
             WorldBorder b = gameWorld.getWorldBorder();
             b.setCenter(map.center.x(), map.center.z());
@@ -389,6 +407,28 @@ public final class GameSession {
     }
 
     private Map<String, String> chestTiers() { return Cfg.chestTiers(plugin.getConfig()); }
+
+    /** Биом карты (biome: в maps/<карта>.yml) на всю скопированную область. */
+    private void applyMapBiome() {
+        if (map.biome == null) return;
+        org.bukkit.block.Biome b = WorldService.biome(map.biome);
+        if (b == null) { plugin.getLogger().warning("Карта " + map.id + ": неизвестный биом " + map.biome); return; }
+        Region box = mapBox();
+        if (box == null) { plugin.getLogger().warning("Карта " + map.id + ": биом не задан — нет области source/center"); return; }
+        int half = map.borderSize > 0 ? (int) Math.ceil(map.borderSize / 2) : 0;
+        double cx = map.center != null ? map.center.x() : (box.minX() + box.maxX()) / 2.0;
+        double cz = map.center != null ? map.center.z() : (box.minZ() + box.maxZ()) / 2.0;
+        Region area = new Region(Math.min(box.minX(), (int) Math.floor(cx) - half) - 16, box.minY() - 16,
+                Math.min(box.minZ(), (int) Math.floor(cz) - half) - 16,
+                Math.max(box.maxX(), (int) Math.ceil(cx) + half) + 16, box.maxY() + 32,
+                Math.max(box.maxZ(), (int) Math.ceil(cz) + half) + 16);
+        long t = System.nanoTime();
+        World w = gameWorld;
+        plugin.worlds().applyBiome(w, area, b).whenComplete((v, ex) -> {
+            if (ex != null) plugin.getLogger().log(Level.WARNING, "Биом карты " + map.id, ex);
+            else plugin.getLogger().info("Биом " + map.biome + " на карте " + map.id + ": " + (System.nanoTime() - t) / 1_000_000 + " мс");
+        });
+    }
 
     private Region mapBox() {
         Pos a = Pos.parse(map.yaml.getString("source.min")), b = Pos.parse(map.yaml.getString("source.max"));
