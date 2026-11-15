@@ -10,6 +10,16 @@ public final class PlayerUtil {
     private PlayerUtil() {}
 
     /** Полный сброс состояния игрока при переходе между лобби/игрой. */
+    /** Повторно отправляет клиенту режим игры (после смены мира клиент может остаться в старом режиме). */
+    public static void resyncGameMode(Player p) {
+        GameMode gm = p.getGameMode();
+        boolean allow = p.getAllowFlight(), flying = p.isFlying();
+        p.setGameMode(gm == GameMode.SURVIVAL ? GameMode.ADVENTURE : GameMode.SURVIVAL);
+        p.setGameMode(gm);
+        p.setAllowFlight(allow);
+        if (allow) p.setFlying(flying);
+    }
+
     public static void reset(Player p, GameMode mode) {
         p.closeInventory();
         p.getInventory().clear();

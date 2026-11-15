@@ -50,9 +50,11 @@ public final class HungerGamesLogic extends GameLogic {
 
     @Override
     public void onStart() {
+        // Сначала режим игры, потом телепорт в другой мир: иначе клиент получает старый режим (ADVENTURE)
+        // из пакета смены мира и бесконечно «бьёт» блоки, хотя сервер считает его SURVIVAL.
+        for (Player p : session.alivePlayers()) PlayerUtil.reset(p, GameMode.SURVIVAL);
         session.spreadToSpawns(session.map().spawns);
         for (Player p : session.alivePlayers()) {
-            PlayerUtil.reset(p, GameMode.SURVIVAL);
             session.equip(p);
             Msg.title(p, "<gold>Голодные игры", freeze > 0 ? "<yellow>Старт через " + freeze + "..." : "<red>В бой!");
         }

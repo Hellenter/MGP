@@ -76,6 +76,16 @@ public final class GameListener implements Listener {
         });
     }
 
+    @EventHandler
+    public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent e) {
+        Player p = e.getPlayer();
+        if (of(p) == null) return;
+        // клиент мог получить режим игры из пакета смены мира до того, как сервер его поменял
+        org.bukkit.Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline() && of(p) != null) ru.mgp.util.PlayerUtil.resyncGameMode(p);
+        }, 2L);
+    }
+
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onOpen(org.bukkit.event.inventory.InventoryOpenEvent e) {
         if (!(e.getPlayer() instanceof Player p)) return;
