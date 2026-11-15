@@ -8,6 +8,7 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import ru.mgp.MGPPlugin;
+import ru.mgp.config.ConfigRegistry;
 import ru.mgp.config.MapConfig;
 import ru.mgp.config.ModeConfig;
 import ru.mgp.session.GameSession;
@@ -138,6 +139,8 @@ public final class MgpCommand implements TabExecutor {
                 }
                 case "create" -> {
                     need(a, 4);
+                    a[1] = ConfigRegistry.cleanId(a[1]);
+                    if (!a[1].matches("[a-z0-9_]{1,32}")) { Msg.send(p, "<red>Id карты: только a-z, 0-9 и _ (до 32 символов)"); return; }
                     File f = plugin.registry().mapFile(a[1]);
                     if (f.exists()) { Msg.send(p, "<red>Карта уже существует."); return; }
                     if (plugin.registry().mode(a[2]) == null) { Msg.send(p, "<red>Нет режима " + a[2]); return; }
@@ -212,7 +215,7 @@ public final class MgpCommand implements TabExecutor {
                 case "info" -> {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
-                    if (m == null) { Msg.send(p, "<red>Нет карты " + a[1]); return; }
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
                     Msg.send(p, "<gold>" + m.id + "</gold> режим=" + m.mode + " шаблон=" + m.template
                             + (plugin.worlds().templateExists(m.template) ? " <green>✔" : " <red>(шаблона нет!)"));
                     Msg.send(p, "<gray>спавнов " + m.spawns.size() + ", сундуков " + m.chests.size() + ", торговцев "
@@ -234,7 +237,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(sender, "<gray>или выдели область /mgp setup pos1 и pos2 и введи /mgp import <карта> <режим>");
             return;
         }
-        String mapId = a[1].toLowerCase(Locale.ROOT), modeId = a[2].toLowerCase(Locale.ROOT);
+        String mapId = ConfigRegistry.cleanId(a[1]), modeId = ConfigRegistry.cleanId(a[2]);
         Pos p1, p2;
         org.bukkit.World world;
         int rest;
@@ -273,7 +276,11 @@ public final class MgpCommand implements TabExecutor {
     private void edit(Player p, String[] a, int need, YamlEdit fn, String done) {
         need(a, need);
         MapConfig m = plugin.registry().map(a[1]);
-        if (m == null) { Msg.send(p, "<red>Нет карты " + a[1] + ". Сначала /mgp setup create"); return; }
+        if (m == null) {
+            Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1])));
+            Msg.send(p, "<gray>Новую карту: /mgp import или /mgp setup create");
+            return;
+        }
         YamlConfiguration y = YamlConfiguration.loadConfiguration(m.file);
         fn.apply(y);
         save(y, m.file);

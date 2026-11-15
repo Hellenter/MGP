@@ -597,7 +597,7 @@ function pageImport(main) {
     try {
       const r = await api('POST', 'import', { ...f, map: f.map.trim().toLowerCase() });
       put(out, card('Готово', h('p', null, r.summary),
-        h('p', { class: 'muted' }, 'Координаты в шаблоне те же, что в исходном мире. Спавны удобно ставить прямо там: встань на точку и введи /mgp setup spawn ' + r.map + '.'),
+        h('p', { class: 'muted' }, 'Координаты в шаблоне те же, что в исходном мире. Спавны удобно ставить прямо там: встань на точку и введи команду ', h('code', null, '/mgp setup spawn ' + r.map)),
         h('button', { onclick: () => { location.hash = '#/map/' + r.map; } }, 'Открыть карту →')));
       await refreshLists();
     } catch (e) { put(out, card('Ошибка', h('p', { style: 'color:var(--bad)' }, e.message))); }

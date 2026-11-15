@@ -62,8 +62,19 @@ public final class ConfigRegistry {
     }
 
     public Collection<ModeConfig> modes() { return modes.values(); }
-    public ModeConfig mode(String id) { return id == null ? null : modes.get(id.toLowerCase(Locale.ROOT)); }
-    public MapConfig map(String id) { return id == null ? null : maps.get(id.toLowerCase(Locale.ROOT)); }
+    public ModeConfig mode(String id) { return id == null ? null : modes.get(cleanId(id)); }
+    public MapConfig map(String id) { return id == null ? null : maps.get(cleanId(id)); }
+
+    /** Нижний регистр и без случайной пунктуации по краям: "hg1." или "«hg1»" из скопированной подсказки -> "hg1". */
+    public static String cleanId(String id) {
+        return id.toLowerCase(Locale.ROOT).replaceAll("^[^\\p{L}\\p{N}_-]+|[^\\p{L}\\p{N}_-]+$", "");
+    }
+
+    /** Текст ошибки "карта не найдена" со списком существующих карт. */
+    public String mapNotFound(String id) {
+        String known = maps.isEmpty() ? "карт пока нет" : "есть: " + String.join(", ", maps.keySet());
+        return "Нет карты «" + id + "» (" + known + ")";
+    }
     public Collection<MapConfig> maps() { return maps.values(); }
 
     public List<MapConfig> mapsFor(String modeId) {
