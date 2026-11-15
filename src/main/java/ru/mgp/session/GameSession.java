@@ -323,38 +323,36 @@ public final class GameSession {
             plugin.getLogger().warning("Карта " + map.id + ": сундуки не заданы и нет области source/center, чтобы найти их автоматически");
             return;
         }
-        // по высоте берём весь мир: сундук может оказаться чуть ниже/выше выделения
-        box = new Region(box.minX(), gameWorld.getMinHeight(), box.minZ(), box.maxX(), gameWorld.getMaxHeight() - 1, box.maxZ());
-        final Region area = box;
         Map<String, String> tiers = chestTiers();
-        Map<String, Integer> seen = new TreeMap<>();
-
         World w = gameWorld;
         MapConfig m = map;
-        List<MapConfig.ChestSpot> found = new ArrayList<>();
-        List<CompletableFuture<?>> all = new ArrayList<>();
-        for (int cx = Math.floorDiv(area.minX(), 16); cx <= Math.floorDiv(area.maxX(), 16); cx++) {
-            for (int cz = Math.floorDiv(area.minZ(), 16); cz <= Math.floorDiv(area.maxZ(), 16); cz++) {
-                all.add(w.getChunkAtAsync(cx, cz, true).thenAccept((Chunk c) -> {
-                    for (BlockState st : c.getTileEntities()) {
-                        synchronized (seen) { seen.merge(st.getType().name(), 1, Integer::sum); }
-                        if (!(st instanceof Container)) continue;
-                        String tier = tiers.get(st.getType().name());
-                        if (tier == null || !mode.loot.containsKey(tier) || !area.contains(st.getX(), st.getY(), st.getZ())) continue;
-                        synchronized (found) { found.add(new MapConfig.ChestSpot(new Pos(st.getX(), st.getY(), st.getZ(), 0, 0), tier)); }
-                    }
-                }));
+        java.nio.file.Path template = plugin.worlds().templatesDir().resolve(m.template);
+        // Читаем сундуки прямо из файлов шаблона: getTileEntities() на живом сервере их не возвращал.
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<MapConfig.ChestSpot> found = new ArrayList<>();
+            Map<String, Integer> seen = new TreeMap<>();
+            Exception err = null;
+            try {
+                java.nio.file.Path dim = ru.mgp.world.RegionCutter.findOverworldDir(template);
+                for (ru.mgp.world.ChestScanner.Found f : ru.mgp.world.ChestScanner.scan(dim, box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+                    seen.merge(f.type(), 1, Integer::sum);
+                    String tier = tiers.get(f.type());
+                    if (tier != null && mode.loot.containsKey(tier)) found.add(new MapConfig.ChestSpot(new Pos(f.x(), f.y(), f.z(), 0, 0), tier));
+                }
+            } catch (Exception e) {
+                err = e;
             }
-        }
-        CompletableFuture.allOf(all.toArray(new CompletableFuture[0])).whenComplete((v, ex) -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (gameWorld != w || state == State.CLOSED) return;
-            if (ex != null) plugin.getLogger().log(Level.WARNING, "Поиск сундуков на карте " + m.id, ex);
-            autoChests.addAll(found);
-            plugin.getLogger().info("Карта " + m.id + ": найдено сундуков автоматически: " + found.size()
-                    + " (блоки с данными в области: " + seen + "). Остальные заполнятся при открытии.");
-            fillChests(null);
-            if (!found.isEmpty()) saveChests(m, found);
-        }));
+            Exception ex = err;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (gameWorld != w || state == State.CLOSED) return;
+                if (ex != null) plugin.getLogger().log(Level.WARNING, "Поиск сундуков на карте " + m.id, ex);
+                autoChests.addAll(found);
+                plugin.getLogger().info("Карта " + m.id + ": найдено сундуков автоматически: " + found.size()
+                        + " (блоки с данными: " + seen + ")");
+                fillChests(null);
+                if (!found.isEmpty()) saveChests(m, found);
+            });
+        });
     }
 
     /**

@@ -69,11 +69,9 @@ public final class MapImporter {
         int minCx = Math.floorDiv(box.minX(), 16) - r.margin(), maxCx = Math.floorDiv(box.maxX(), 16) + r.margin();
         int minCz = Math.floorDiv(box.minZ(), 16) - r.margin(), maxCz = Math.floorDiv(box.maxZ(), 16) + r.margin();
 
-        CompletableFuture<List<String>> chestsF = r.detectChests() && !r.lobby() ? findChests(w, box, minCx, minCz, maxCx, maxCz)
-                : CompletableFuture.completedFuture(null);
-
-        chestsF.whenComplete((chests, ex) -> {
-            if (ex != null) { result.completeExceptionally(ex); return; }
+        boolean scan = r.detectChests() && !r.lobby();
+        Map<String, String> tiers = chestTiers();
+        CompletableFuture.completedFuture(null).whenComplete((ignored, ex) -> {
             w.save(true); // сбросить изменения на диск перед копированием файлов
             Path src = w.getWorldFolder().toPath();
             Path dst = plugin.worlds().templatesDir().resolve(r.mapId());
@@ -82,6 +80,15 @@ public final class MapImporter {
                     FileUtil.deleteRecursive(dst);
                     RegionCutter.Stats st = RegionCutter.cutWorld(src, dst, minCx, minCz, maxCx, maxCz);
                     if (st.chunks() == 0) throw new IOException("В этой области нет сгенерированных чанков — проверь координаты и мир");
+                    // сундуки ищем в уже вырезанных файлах: getTileEntities() на живом сервере их не возвращал
+                    List<String> chests = scan ? new ArrayList<>() : null;
+                    if (scan) {
+                        for (ChestScanner.Found f : ChestScanner.scan(RegionCutter.findOverworldDir(dst), box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+                            String tier = tiers.get(f.type());
+                            if (tier != null) chests.add(f.x() + " " + f.y() + " " + f.z() + " " + tier);
+                        }
+                        Collections.sort(chests);
+                    }
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         try {
                             boolean created = r.lobby() || writeMapConfig(r, chests);
@@ -100,7 +107,15 @@ public final class MapImporter {
         return result;
     }
 
-    /** Загружает чанки области асинхронно и собирает контейнеры: "x y z tier". */
+    private Map<String, String> chestTiers() {
+        Map<String, String> tiers = new HashMap<>();
+        ConfigurationSection cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
+        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
+        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
+        return tiers;
+    }
+
+    /** Загружает чанки области асинхронно и собирает контейнеры: "x y z tier". (Не используется: см. ChestScanner.) */
     private CompletableFuture<List<String>> findChests(World w, Region box, int minCx, int minCz, int maxCx, int maxCz) {
         Map<String, String> tiers = new HashMap<>();
         ConfigurationSection cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
