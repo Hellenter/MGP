@@ -530,7 +530,7 @@ function mapTabs(d) {
     ],
     'Спавны и сундуки': () => [
       card('Спавны игроков', fields(d, [{ k: 'spawns', l: 'x y z yaw pitch — по одному на строку', t: 'lines', rows: 10,
-        hint: `Сейчас: ${(d.spawns || []).length}. В игре: /mgp setup spawn <карта>` }])),
+        hint: `Сейчас: ${(d.spawns || []).length}. Кривой спавн: сотри его строку и сохрани. В игре: /mgp setup spawn <карта> добавить, /mgp setup delspawn <карта> удалить ближайший, /mgp setup spawns <карта> список` }])),
       card('Сундуки', fields(d, [{ k: 'chests', l: 'x y z тир — по одному на строку', t: 'lines', rows: 10,
         hint: 'В игре: смотри на сундук и пиши /mgp setup chest <карта> <тир>' }])),
     ],

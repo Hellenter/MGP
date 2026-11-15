@@ -113,7 +113,9 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup export <шаблон></yellow> — скопировать текущий мир в templates/",
                     "<yellow>/mgp setup create <карта> <режим> <шаблон>",
                     "<yellow>/mgp setup spawn <карта></yellow> — добавить спавн игрока",
-                    "<yellow>/mgp setup clearspawns <карта>",
+                    "<yellow>/mgp setup delspawn <карта> [номер|last]</yellow> — удалить ближайший к тебе спавн (или по номеру)",
+                    "<yellow>/mgp setup spawns <карта></yellow> — список спавнов с номерами",
+                    "<yellow>/mgp setup clearspawns <карта></yellow> — удалить все спавны",
                     "<yellow>/mgp setup spectator <карта></yellow> — точка наблюдателей",
                     "<yellow>/mgp setup center <карта> [размер барьера]",
                     "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
@@ -155,6 +157,8 @@ public final class MgpCommand implements TabExecutor {
                     Msg.send(p, "<green>Карта создана: maps/" + f.getName());
                 }
                 case "spawn" -> edit(p, a, 2, y -> addString(y, "spawns", Pos.of(loc).serialize()), "Спавн добавлен");
+                case "delspawn" -> deleteSpawn(p, a);
+                case "spawns" -> listSpawns(p, a);
                 case "clearspawns" -> edit(p, a, 2, y -> y.set("spawns", new ArrayList<String>()), "Спавны очищены");
                 case "spectator" -> edit(p, a, 2, y -> y.set("spectator", Pos.of(loc).serialize()), "Точка наблюдателей задана");
                 case "center" -> edit(p, a, 2, y -> {
@@ -220,6 +224,7 @@ public final class MgpCommand implements TabExecutor {
                             + (plugin.worlds().templateExists(m.template) ? " <green>✔" : " <red>(шаблона нет!)"));
                     Msg.send(p, "<gray>спавнов " + m.spawns.size() + ", сундуков " + m.chests.size() + ", торговцев "
                             + m.traders.size() + ", триггеров " + m.triggers.size() + ", участков " + m.plots.size());
+                    listSpawns(p, a);
                 }
                 default -> setup(p, new String[0]);
             }
@@ -294,6 +299,73 @@ public final class MgpCommand implements TabExecutor {
         return new Pos[]{a, b};
     }
 
+    // ------------------------------------------------------------------ spawns
+
+    /** /mgp setup delspawn <карта> [номер|last]: без номера удаляет ближайший к игроку спавн. */
+    private void deleteSpawn(Player p, String[] a) {
+        need(a, 2);
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        YamlConfiguration y = YamlConfiguration.loadConfiguration(m.file);
+        List<String> list = new ArrayList<>(y.getStringList("spawns"));
+        if (list.isEmpty()) { Msg.send(p, "<red>У карты " + m.id + " нет спавнов."); return; }
+        int idx;
+        String how;
+        if (a.length > 2 && a[2].equalsIgnoreCase("last")) {
+            idx = list.size() - 1;
+            how = "последний";
+        } else if (a.length > 2) {
+            try { idx = Integer.parseInt(a[2]) - 1; } catch (NumberFormatException e) { idx = -1; }
+            if (idx < 0 || idx >= list.size()) { Msg.send(p, "<red>Номер от 1 до " + list.size() + " или last."); return; }
+            how = "№" + (idx + 1);
+        } else {
+            Location l = p.getLocation();
+            idx = -1;
+            double best = Double.MAX_VALUE;
+            for (int i = 0; i < list.size(); i++) {
+                Pos s = Pos.parse(list.get(i));
+                if (s == null) continue;
+                double d = sq(s.x() - l.getX()) + sq(s.y() - l.getY()) + sq(s.z() - l.getZ());
+                if (d < best) { best = d; idx = i; }
+            }
+            if (idx < 0) { Msg.send(p, "<red>Не удалось прочитать спавны карты."); return; }
+            double dist = Math.sqrt(best);
+            if (dist > 10) {
+                Msg.send(p, String.format(Locale.ROOT, "<red>Ближайший спавн (№%d) в %.0f блоках от тебя. Подойди к нему или укажи номер: /mgp setup delspawn %s %d",
+                        idx + 1, dist, m.id, idx + 1));
+                return;
+            }
+            how = String.format(Locale.ROOT, "№%d, %.1f бл. от тебя", idx + 1, dist);
+        }
+        String removed = list.remove(idx);
+        y.set("spawns", list);
+        save(y, m.file);
+        plugin.registry().loadMap(m.file);
+        Msg.send(p, "<green>Спавн удалён (" + how + "): <white>" + removed + "</white>. Осталось: " + list.size());
+    }
+
+    private void listSpawns(Player p, String[] a) {
+        need(a, 2);
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        if (m.spawns.isEmpty()) { Msg.send(p, "<gray>Спавнов нет. Встань на точку: /mgp setup spawn " + m.id); return; }
+        Msg.send(p, "<gold>Спавны " + m.id + " (" + m.spawns.size() + "):");
+        Location l = p.getLocation();
+        for (int i = 0; i < m.spawns.size(); i++) {
+            Pos s = m.spawns.get(i);
+            double d = Math.sqrt(sq(s.x() - l.getX()) + sq(s.y() - l.getY()) + sq(s.z() - l.getZ()));
+            String tp = "/tp " + p.getName() + " " + Msg.esc(s.serialize());
+            String del = "/mgp setup delspawn " + m.id + " " + (i + 1);
+            p.sendMessage(Msg.parse(String.format(Locale.ROOT,
+                    "<gray>%d.</gray> <white>%s</white> <dark_gray>(%.0f бл.)</dark_gray> "
+                            + "<aqua><click:run_command:'%s'><hover:show_text:'Телепорт'>[тп]</hover></click></aqua> "
+                            + "<red><click:suggest_command:'%s'><hover:show_text:'Подставить команду удаления'>[удалить]</hover></click></red>",
+                    i + 1, s.serialize(), d, tp, del)));
+        }
+    }
+
+    private static double sq(double v) { return v * v; }
+
     private static void need(String[] a, int n) {
         if (a.length < n) throw new IllegalArgumentException("Не хватает аргументов. /mgp setup — справка");
     }
@@ -338,7 +410,7 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 2 && a[0].equalsIgnoreCase("join")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
-                out.addAll(List.of("export", "create", "spawn", "clearspawns", "spectator", "center", "chest",
+                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
                         "trader", "pos1", "pos2", "plot", "trigger", "waiting", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting")) plugin.registry().modes().forEach(m -> out.add(m.id));
@@ -346,6 +418,10 @@ public final class MgpCommand implements TabExecutor {
                     plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("create")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("delspawn")) {
+                MapConfig m = plugin.registry().map(a[2]);
+                out.add("last");
+                if (m != null) for (int i = 1; i <= m.spawns.size(); i++) out.add(String.valueOf(i));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("chest")) {
                 MapConfig m = plugin.registry().map(a[2]);
                 ModeConfig mode = m == null ? null : plugin.registry().mode(m.mode);
