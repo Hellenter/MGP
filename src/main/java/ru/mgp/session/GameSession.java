@@ -55,6 +55,7 @@ public final class GameSession {
     private final Map<String, Vote> votes = new LinkedHashMap<>();
     private final Map<String, String> chosenModifiers = new LinkedHashMap<>();
     private final Set<String> firedTriggers = new HashSet<>();
+    private final MapScripts scripts = new MapScripts(this);
     private final Map<String, Set<UUID>> firedPerPlayer = new HashMap<>();
 
     private World waitingWorld;
@@ -187,6 +188,7 @@ public final class GameSession {
         plugin.sessions().unbind(p);
         for (Vote v : votes.values()) v.remove(u);
         boolean wasAlive = alive.remove(u);
+        scripts.clear(p);
         if (toHub) plugin.hub().send(p);
         else plugin.visibility().refresh(p);
 
@@ -618,6 +620,7 @@ public final class GameSession {
     /** Игрок выбыл: становится наблюдателем (летает, невидим для живых). */
     public void eliminate(Player p) {
         alive.remove(p.getUniqueId());
+        scripts.clear(p);
         makeSpectator(p);
     }
 
@@ -655,6 +658,7 @@ public final class GameSession {
                     names.isEmpty() ? "" : "<yellow>" + String.join(", ", names));
             if (win) ActionRunner.run(this, mode.winActions, p);
         }
+        scripts.clearAll();
         logic.onEnd();
     }
 
@@ -745,6 +749,7 @@ public final class GameSession {
 
     public State state() { return state; }
     public GameLogic logic() { return logic; }
+    public MapScripts scripts() { return scripts; }
     public MapConfig map() { return map; }
     public World gameWorld() { return gameWorld; }
     public World waitingWorld() { return waitingWorld; }

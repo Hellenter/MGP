@@ -322,7 +322,8 @@ const card = (title, ...kids) => h('div', { class: 'card' }, title ? h('h3', nul
 // ------------------------------------------------------------------ подсказки
 const ACTIONS_HINT = 'Действия по одному на строку: message: …, broadcast: …, title: верх | низ, actionbar: …, sound: minecraft:…, ' +
   'time: 18000 lock, weather: clear|rain|thunder, gamerule: <id> <знач>, effect: speed 1 [сек], clear-effects, give: ARROW 16, heal, ' +
-  'max-health: 40, border: <размер> [сек], refill-chests [tier], command: … {player}, mode: deathmatch|pvp-on|pvp-off';
+  'max-health: 40, border: <размер> [сек], refill-chests [tier], command: … {player}, mode: deathmatch|pvp-on|pvp-off, ' +
+  'teleport: x y z [yaw pitch], particle: <тип> [кол-во] [x y z], setblock: x y z <блок>';
 const SIDEBAR_HINT = 'Плейсхолдеры: {map} {players} {max} {min} {need} {countdown} {state} {alive} {kills} {time} {elapsed} {next_event} {next_event_time} {kit}' +
   ' · Голодные игры: {pvp} · Билд баттл: {theme} {phase} {phase_time} {plot}';
 const VOTE_LABELS = { MOST_VOTES: 'Побеждает сильнейший', RANDOM_VOTED: 'Случайный из проголосованных', WEIGHTED: 'Голоса добавляют шанс', NONE: 'Без голосования (случайно)' };
@@ -560,6 +561,25 @@ function mapTabs(d) {
           { k: 'mode', l: 'Срабатывание', t: 'select', opts: ['ONCE', 'PER_PLAYER', 'REPEAT'] },
           { k: 'min', l: 'Угол 1', ph: 'x y z' },
           { k: 'max', l: 'Угол 2', ph: 'x y z' },
+          { k: 'actions', l: 'Действия', t: 'lines', hint: ACTIONS_HINT },
+        ]),
+      }))],
+    'Скрипты': () => [card('Скрипты карты',
+      h('p', { class: 'muted' }, 'Интерактивные объекты вместо командных блоков. hold — подойти к блоку и держать Shift (частицы, шкала прогресса, подсказка над хотбаром); button — ПКМ по блоку; plate — наступить на блок; zone — войти в радиус. В игре: /mgp setup script <карта> <id> hold, глядя на блок, затем /mgp setup script <карта> <id> tphere в точке назначения.'),
+      listEditor(d, 'scripts', {
+        addText: 'скрипт', make: () => ({ id: 'teleport' + ((d.scripts || []).length + 1), type: 'hold', block: '0 64 0', hold: 3, hint: '<yellow>Зажми <gold><bold>SHIFT</bold></gold>, чтобы активировать', progress: '<aqua>Телепорт', particle: 'PORTAL', actions: [] }),
+        summary: (t) => [h('b', null, t.id), ' ', h('span', { class: 'badge info' }, t.type || 'button'), ' ', h('span', { class: 'muted' }, t.block || '')],
+        body: (t) => fields(t, [
+          { k: 'id', l: 'Id' },
+          { k: 'type', l: 'Тип', t: 'select', opts: ['hold', 'button', 'plate', 'zone'] },
+          { k: 'block', l: 'Блок', ph: 'x y z', hint: 'Люк, кнопка, плита или центр зоны' },
+          { k: 'hold', l: 'Держать Shift, сек (hold)', t: 'num' },
+          { k: 'radius', l: 'Радиус', t: 'num', hint: 'По умолчанию 1.8 (zone — 2)' },
+          { k: 'hint', l: 'Подсказка над хотбаром (hold)', t: 'mm' },
+          { k: 'progress', l: 'Надпись шкалы прогресса (hold)', t: 'mm' },
+          { k: 'particle', l: 'Частицы вокруг блока', ph: 'PORTAL, END_ROD, WITCH… (none — без частиц)' },
+          { k: 'cooldown', l: 'Перезарядка для игрока, сек', t: 'num' },
+          { k: 'mode', l: 'Срабатывание', t: 'select', opts: ['REPEAT', 'ONCE', 'PER_PLAYER'] },
           { k: 'actions', l: 'Действия', t: 'lines', hint: ACTIONS_HINT },
         ]),
       }))],

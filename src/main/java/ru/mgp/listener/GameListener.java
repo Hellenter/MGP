@@ -178,6 +178,7 @@ public final class GameListener implements Listener {
             if (s.isPlaying() || s.state() == GameSession.State.ENDING) e.setCancelled(true); // наблюдатели
             return;
         }
+        s.scripts().onInteract(e);
         s.logic().onInteract(e);
     }
 

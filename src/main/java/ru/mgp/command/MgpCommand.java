@@ -219,6 +219,9 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup lobby default</yellow> — общее лобби ожидания для всех режимов без своего",
                     "<yellow>/mgp setup biome <карта> <биом|none></yellow> — биом на всю карту",
+                    "<yellow>/mgp setup script <карта> <id> hold|button|plate|zone</yellow> — скрипт на блоке, на который смотришь",
+                    "<yellow>/mgp setup script <карта> <id> tphere | action <действие> | set <ключ> <знач> | clear | remove",
+                    "<yellow>/mgp setup scripts <карта></yellow> — список скриптов карты",
                     "<yellow>/mgp setup info <карта>")) Msg.send(p, line);
             return;
         }
@@ -341,6 +344,16 @@ public final class MgpCommand implements TabExecutor {
                     }, "Триггер добавлен — впиши действия в файл карты и сделай /mgp reload");
                 }
                 case "lobby" -> setupLobby(p, a);
+                case "script" -> setupScript(p, a);
+                case "scripts" -> {
+                    need(a, 2);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    if (m.scripts.isEmpty()) Msg.send(p, "<gray>На карте нет скриптов. /mgp setup script <карта> <id> hold|button|plate|zone");
+                    for (MapConfig.Script sc : m.scripts)
+                        Msg.send(p, "<gold>" + Msg.esc(sc.id()) + "</gold> <gray>" + sc.type().name().toLowerCase(Locale.ROOT) + " у " + sc.block().serialize()
+                                + ", действий: " + sc.actions().size() + (sc.type() == MapConfig.Script.Type.HOLD ? ", держать " + sc.hold() + " с" : ""));
+                }
                 case "waiting" -> {
                     need(a, 2);
                     ModeConfig m = plugin.registry().mode(a[1]);
@@ -628,6 +641,121 @@ public final class MgpCommand implements TabExecutor {
         y.set(path, list);
     }
 
+    /** /mgp setup script <карта> <id> <hold|button|plate|zone|tphere|action|set|clear|remove> ... */
+    private void setupScript(Player p, String[] a) {
+        if (a.length < 4) {
+            Msg.send(p, "<gold>Скрипты карты</gold> <gray>(вместо командных блоков, хранятся в maps/<карта>.yml → scripts)");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> hold</yellow> — смотри на блок (например, железный люк): игрок держит Shift рядом с ним");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> button|plate|zone</yellow> — ПКМ по блоку / наступить / войти в радиус");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> tphere</yellow> — добавить телепорт сюда (где ты стоишь)");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> action <действие></yellow> — например: action title: <red>Ловушка!");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> set <ключ> <значение></yellow> — hold, radius, hint, progress, particle, cooldown, mode (once|per_player|repeat), cancel-use");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> clear | remove</yellow> — убрать действия / удалить скрипт");
+            return;
+        }
+        String id = a[2];
+        String op = a[3].toLowerCase(Locale.ROOT);
+        String rest = a.length > 4 ? String.join(" ", Arrays.copyOfRange(a, 4, a.length)) : "";
+        switch (op) {
+            case "hold", "button", "plate", "zone" -> {
+                Block b = p.getTargetBlockExact(6);
+                if (b == null || b.getType().isAir()) {
+                    if (op.equals("hold") || op.equals("button")) { Msg.send(p, "<red>Посмотри на блок (до 6 блоков)."); return; }
+                    b = p.getLocation().getBlock();
+                }
+                Block fb = b;
+                editScript(p, a, id, true, m -> {
+                    m.put("type", op);
+                    m.put("block", fb.getX() + " " + fb.getY() + " " + fb.getZ());
+                    if (op.equals("hold")) {
+                        m.putIfAbsent("hold", 3);
+                        m.putIfAbsent("hint", "<yellow>Зажми <gold><bold>SHIFT</bold></gold>, чтобы активировать");
+                        m.putIfAbsent("progress", "<aqua>Телепорт");
+                        m.putIfAbsent("particle", "PORTAL");
+                    }
+                    m.putIfAbsent("actions", new ArrayList<String>());
+                }, "Скрипт " + id + " (" + op + ") на блоке " + b.getType() + " " + b.getX() + " " + b.getY() + " " + b.getZ()
+                        + ". Теперь добавь действия: tphere или action <действие>");
+            }
+            case "tphere" -> editScript(p, a, id, false, m -> {
+                List<String> acts = actions(m);
+                acts.add("teleport: " + Pos.of(p.getLocation()).serialize());
+                acts.add("sound: minecraft:entity.enderman.teleport");
+                m.put("actions", acts);
+            }, "Добавлен телепорт в " + Pos.of(p.getLocation()).serialize());
+            case "action" -> {
+                if (rest.isBlank()) { Msg.send(p, "<red>Впиши действие, например: action message: <green>Привет"); return; }
+                editScript(p, a, id, false, m -> {
+                    List<String> acts = actions(m);
+                    acts.add(rest);
+                    m.put("actions", acts);
+                }, "Действие добавлено: " + Msg.esc(rest));
+            }
+            case "set" -> {
+                if (a.length < 6) { Msg.send(p, "<red>/mgp setup script <карта> <id> set <ключ> <значение>"); return; }
+                String k = a[4].toLowerCase(Locale.ROOT);
+                String v = String.join(" ", Arrays.copyOfRange(a, 5, a.length));
+                if (!List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use", "type", "block").contains(k)) {
+                    Msg.send(p, "<red>Неизвестный ключ " + Msg.esc(k)); return;
+                }
+                editScript(p, a, id, false, m -> {
+                    if (v.equalsIgnoreCase("none")) m.remove(k);
+                    else if (k.equals("hold") || k.equals("radius")) m.put(k, Double.parseDouble(v.replace(',', '.')));
+                    else if (k.equals("cooldown")) m.put(k, Integer.parseInt(v));
+                    else if (k.equals("cancel-use")) m.put(k, Boolean.parseBoolean(v));
+                    else m.put(k, v);
+                }, k + " = " + Msg.esc(v));
+            }
+            case "clear" -> editScript(p, a, id, false, m -> m.put("actions", new ArrayList<String>()), "Действия скрипта " + id + " очищены");
+            case "remove" -> {
+                MapConfig mc = plugin.registry().map(a[1]);
+                if (mc == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                YamlConfiguration y = YamlConfiguration.loadConfiguration(mc.file);
+                List<Map<?, ?>> list = new ArrayList<>(y.getMapList("scripts"));
+                boolean removed = list.removeIf(x -> id.equals(String.valueOf(x.get("id"))));
+                y.set("scripts", list.isEmpty() ? null : list);
+                save(y, mc.file);
+                plugin.registry().loadMap(mc.file);
+                Msg.send(p, removed ? "<green>Скрипт " + id + " удалён" : "<red>Нет скрипта " + id);
+            }
+            default -> Msg.send(p, "<red>Неизвестно: " + Msg.esc(op) + ". /mgp setup script — справка");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> actions(Map<String, Object> m) {
+        Object o = m.get("actions");
+        List<String> out = new ArrayList<>();
+        if (o instanceof List<?> l) for (Object x : l) out.add(String.valueOf(x));
+        return out;
+    }
+
+    /** Найти скрипт id в файле карты (или создать, если create) и изменить его. */
+    private void editScript(Player p, String[] a, String id, boolean create, java.util.function.Consumer<Map<String, Object>> fn, String done) {
+        MapConfig mc = plugin.registry().map(a[1]);
+        if (mc == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        YamlConfiguration y = YamlConfiguration.loadConfiguration(mc.file);
+        List<Map<String, Object>> list = new ArrayList<>();
+        Map<String, Object> target = null;
+        for (Map<?, ?> raw : y.getMapList("scripts")) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            raw.forEach((k, v) -> m.put(String.valueOf(k), v));
+            if (id.equals(String.valueOf(m.get("id")))) target = m;
+            list.add(m);
+        }
+        if (target == null) {
+            if (!create) { Msg.send(p, "<red>Нет скрипта " + Msg.esc(id) + ". Создай: /mgp setup script " + a[1] + " " + id + " hold|button|plate|zone"); return; }
+            target = new LinkedHashMap<>();
+            target.put("id", id);
+            list.add(target);
+        }
+        fn.accept(target);
+        y.set("scripts", list);
+        save(y, mc.file);
+        plugin.registry().loadMap(mc.file);
+        Msg.send(p, "<green>" + done);
+    }
+
     private static void addMap(YamlConfiguration y, String path, Map<String, Object> value) {
         List<Object> list = new ArrayList<>(y.getMapList(path));
         list.add(value);
@@ -667,12 +795,19 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "name", "biome", "plot", "trigger", "waiting", "lobby", "info"));
+                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 if (a[1].equalsIgnoreCase("lobby")) out.add("default");
                 else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))
                     plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script")) {
+                MapConfig mc = plugin.registry().map(a[2]);
+                if (mc != null) mc.scripts.forEach(x -> out.add(x.id()));
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script")) {
+                out.addAll(List.of("hold", "button", "plate", "zone", "tphere", "action", "set", "clear", "remove"));
+            } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script") && a[4].equalsIgnoreCase("set")) {
+                out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("alsomode")) {
                 plugin.registry().modes().forEach(m -> { out.add(m.id); out.add("-" + m.id); });
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("biome")) {

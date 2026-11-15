@@ -37,6 +37,9 @@ import java.util.*;
  *   refill-chests [tier]
  *   command: <консольная команда, {player} — имя игрока>
  *   mode: <действие режима>      — например mode: deathmatch
+ *   teleport: x y z [yaw pitch]  — телепорт в мире игры (без yaw/pitch — взгляд не меняется)
+ *   particle: <тип> [кол-во] [x y z] — частицы у игрока или в точке
+ *   setblock: x y z <блок>       — поставить блок в мире игры (AIR — убрать)
  */
 public final class ActionRunner {
     private ActionRunner() {}
@@ -122,6 +125,37 @@ public final class ActionRunner {
                 } else {
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), arg);
                 }
+            }
+            case "teleport", "tp" -> {
+                if (world == null) return;
+                String[] t = arg.split("[\\s,]+");
+                ru.mgp.util.Pos pos = ru.mgp.util.Pos.parse(arg);
+                for (Player pl : aliveTargets) {
+                    org.bukkit.Location to = pos.toLocation(world);
+                    if (t.length < 5) { to.setYaw(pl.getLocation().getYaw()); to.setPitch(pl.getLocation().getPitch()); }
+                    MapScripts.particle(world, "REVERSE_PORTAL", pl.getLocation().add(0, 1, 0), 30, 0.4);
+                    pl.teleport(to);
+                    pl.setFallDistance(0);
+                    MapScripts.particle(world, "PORTAL", to.clone().add(0, 1, 0), 40, 0.4);
+                }
+            }
+            case "particle", "particles" -> {
+                if (world == null) return;
+                String[] t = arg.split("\\s+");
+                int count = t.length > 1 ? Integer.parseInt(t[1]) : 20;
+                if (t.length >= 5) {
+                    MapScripts.particle(world, t[0], new org.bukkit.Location(world, Double.parseDouble(t[2]), Double.parseDouble(t[3]), Double.parseDouble(t[4])), count, 0.4);
+                } else {
+                    for (Player pl : aliveTargets) MapScripts.particle(world, t[0], pl.getLocation().add(0, 1, 0), count, 0.4);
+                }
+            }
+            case "setblock" -> {
+                if (world == null) return;
+                String[] t = arg.split("\\s+");
+                org.bukkit.Material m = org.bukkit.Material.matchMaterial(t[3]);
+                if (m == null || !m.isBlock()) throw new IllegalArgumentException("неизвестный блок " + t[3]);
+                world.getBlockAt((int) Math.floor(Double.parseDouble(t[0])), (int) Math.floor(Double.parseDouble(t[1])),
+                        (int) Math.floor(Double.parseDouble(t[2]))).setType(m);
             }
             case "mode" -> {
                 if (!s.logic().handleAction(arg, target))
