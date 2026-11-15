@@ -63,6 +63,7 @@ public final class MgpCommand implements TabExecutor {
                 GameSession s = plugin.sessions().of(p);
                 if (s == null || !s.forceStart()) Msg.send(p, "<red>Ты не в лобби ожидания.");
             }
+            case "debug" -> { if (admin(sender)) debug(sender, a); }
             case "reload" -> {
                 if (!admin(sender)) return true;
                 plugin.reloadAll();
@@ -84,6 +85,50 @@ public final class MgpCommand implements TabExecutor {
             default -> help(sender);
         }
         return true;
+    }
+
+    /** /mgp debug [режим] — что плагин на самом деле видит: тиры сундуков, лут, ломаемые блоки, состояние игрока. */
+    private void debug(CommandSender s, String[] a) {
+        Msg.send(s, "<gold>Тиры сундуков: <white>" + ru.mgp.util.Cfg.chestTiers(plugin.getConfig()));
+        String modeId = a.length > 1 ? a[1] : "hunger_games";
+        ModeConfig m = plugin.registry().mode(modeId);
+        if (m == null) { Msg.send(s, "<red>Нет режима " + Msg.esc(modeId)); return; }
+        Msg.send(s, "<gold>Таблицы лута " + m.id + ": <white>" + m.loot.keySet());
+        List<String> unknown = new ArrayList<>();
+        Set<org.bukkit.Material> br = ru.mgp.util.Cfg.materials(m.settings.getStringList("breakable-blocks"), unknown);
+        StringBuilder sample = new StringBuilder();
+        for (String n : List.of("OAK_LEAVES", "VINE", "SHORT_GRASS", "TALL_GRASS", "POPPY", "COBWEB", "CAVE_VINES", "STONE")) {
+            org.bukkit.Material mat = org.bukkit.Material.matchMaterial(n);
+            sample.append(n).append(mat != null && br.contains(mat) ? "<green>✔</green> " : "<red>✘</red> ");
+        }
+        Msg.send(s, "<gold>Ломаемых блоков: <white>" + br.size() + "</white> " + sample + (unknown.isEmpty() ? "" : "<red>не распознано: " + Msg.esc(unknown.toString())));
+        MapConfig map = a.length > 2 ? plugin.registry().map(a[2]) : null;
+        if (map != null) {
+            ru.mgp.util.Pos mn = ru.mgp.util.Pos.parse(map.yaml.getString("source.min")), mx = ru.mgp.util.Pos.parse(map.yaml.getString("source.max"));
+            if (mn == null || mx == null) Msg.send(s, "<yellow>У карты " + map.id + " нет source.min/max — автопоиск сундуков недоступен");
+            else {
+                try {
+                    var r = ru.mgp.util.Region.of(mn, mx);
+                    var dim = ru.mgp.world.RegionCutter.findOverworldDir(plugin.worlds().templatesDir().resolve(map.template));
+                    Map<String, String> tiers = ru.mgp.util.Cfg.chestTiers(plugin.getConfig());
+                    Map<String, Integer> byTier = new TreeMap<>();
+                    for (var f : ru.mgp.world.ChestScanner.scan(dim, r.minX(), r.minZ(), r.maxX(), r.maxZ())) {
+                        String t = tiers.get(f.type());
+                        if (t != null) byTier.merge(t + (m.loot.containsKey(t) ? "" : "(нет таблицы!)"), 1, Integer::sum);
+                    }
+                    Msg.send(s, "<gold>Сундуки в шаблоне " + map.template + ": <white>" + byTier + "</white>, в списке карты: " + map.chests.size());
+                } catch (Exception ex) {
+                    Msg.send(s, "<red>Ошибка чтения шаблона: " + Msg.esc(String.valueOf(ex.getMessage())));
+                }
+            }
+        }
+        if (s instanceof Player p) {
+            GameSession gs = plugin.sessions().of(p);
+            Msg.send(p, "<gold>Ты: <white>режим игры " + p.getGameMode() + ", мир " + p.getWorld().getName()
+                    + (gs == null ? ", не в сессии" : ", сессия " + gs.state() + (gs.isAlive(p) ? ", жив" : ", не жив")));
+            org.bukkit.block.Block b = p.getTargetBlockExact(6);
+            if (b != null) Msg.send(p, "<gold>Смотришь на: <white>" + b.getType() + (br.contains(b.getType()) ? " <green>(можно ломать)" : " <red>(нельзя ломать)"));
+        }
     }
 
     private boolean admin(CommandSender s) {
@@ -434,7 +479,7 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "debug"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("import")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 10 && a[0].equalsIgnoreCase("import")) {

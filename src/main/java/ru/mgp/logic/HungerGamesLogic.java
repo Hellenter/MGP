@@ -169,7 +169,10 @@ public final class HungerGamesLogic extends GameLogic {
 
     @Override
     public void onBlockBreak(BlockBreakEvent e) {
-        if (!breakable.contains(e.getBlock().getType())) e.setCancelled(true);
+        if (!breakable.contains(e.getBlock().getType())) {
+            e.setCancelled(true);
+            e.getPlayer().sendActionBar(Msg.parse("<red>Этот блок ломать нельзя <gray>(" + e.getBlock().getType().name() + ")"));
+        }
     }
 
     @Override
@@ -196,6 +199,8 @@ public final class HungerGamesLogic extends GameLogic {
         int left = freeze + grace - session.elapsed();
         ph.put("pvp", pvp ? "<red>вкл" : "<green>через " + Msg.time(left));
     }
+
+    public Set<Material> breakable() { return breakable; }
 
     private Player recentAttacker(Player victim) {
         UUID u = lastAttacker.get(victim.getUniqueId());

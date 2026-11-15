@@ -87,8 +87,10 @@ public final class GameListener implements Listener {
     public void onBreak(BlockBreakEvent e) {
         GameSession s = of(e.getPlayer());
         if (s == null) return;
-        if (!active(s, e.getPlayer())) e.setCancelled(true);
-        else s.logic().onBlockBreak(e);
+        if (!active(s, e.getPlayer())) {
+            e.setCancelled(true);
+            e.getPlayer().sendActionBar(ru.mgp.util.Msg.parse("<red>Ломать можно только живым игрокам во время игры"));
+        } else s.logic().onBlockBreak(e);
     }
 
     @EventHandler(ignoreCancelled = true)

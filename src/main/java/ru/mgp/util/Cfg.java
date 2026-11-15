@@ -42,6 +42,26 @@ public final class Cfg {
         return out;
     }
 
+    /**
+     * Тип контейнера -> тир лута (import.chest-tiers). Если раздела в config.yml нет (конфиг от старой версии),
+     * Bukkit возвращает пустой раздел, а не значения по умолчанию, — тогда берём CHEST=tier1, TRAPPED_CHEST=tier2.
+     */
+    public static Map<String, String> chestTiers(org.bukkit.configuration.file.FileConfiguration config) {
+        Map<String, String> tiers = new java.util.HashMap<>();
+        Object raw = config.get("import.chest-tiers", null);
+        if (raw instanceof ConfigurationSection cs) {
+            for (String k : cs.getKeys(false)) {
+                String v = cs.getString(k);
+                if (v != null && !v.isBlank()) tiers.put(k.toUpperCase(java.util.Locale.ROOT), v.trim());
+            }
+        }
+        if (tiers.isEmpty()) {
+            tiers.put("CHEST", "tier1");
+            tiers.put("TRAPPED_CHEST", "tier2");
+        }
+        return tiers;
+    }
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> asMap(Object o) {
         if (o instanceof ConfigurationSection s) return s.getValues(false);

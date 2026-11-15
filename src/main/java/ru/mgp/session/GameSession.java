@@ -388,13 +388,7 @@ public final class GameSession {
         table.fill(inv, random);
     }
 
-    private Map<String, String> chestTiers() {
-        Map<String, String> tiers = new HashMap<>();
-        var cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
-        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
-        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
-        return tiers;
-    }
+    private Map<String, String> chestTiers() { return Cfg.chestTiers(plugin.getConfig()); }
 
     private Region mapBox() {
         Pos a = Pos.parse(map.yaml.getString("source.min")), b = Pos.parse(map.yaml.getString("source.max"));

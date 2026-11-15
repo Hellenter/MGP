@@ -107,20 +107,11 @@ public final class MapImporter {
         return result;
     }
 
-    private Map<String, String> chestTiers() {
-        Map<String, String> tiers = new HashMap<>();
-        ConfigurationSection cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
-        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
-        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
-        return tiers;
-    }
+    private Map<String, String> chestTiers() { return ru.mgp.util.Cfg.chestTiers(plugin.getConfig()); }
 
     /** Загружает чанки области асинхронно и собирает контейнеры: "x y z tier". (Не используется: см. ChestScanner.) */
     private CompletableFuture<List<String>> findChests(World w, Region box, int minCx, int minCz, int maxCx, int maxCz) {
-        Map<String, String> tiers = new HashMap<>();
-        ConfigurationSection cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
-        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
-        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
+        Map<String, String> tiers = chestTiers();
 
         List<String> found = Collections.synchronizedList(new ArrayList<>());
         List<CompletableFuture<?>> all = new ArrayList<>();
