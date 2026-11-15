@@ -210,6 +210,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
                     "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
                     "<yellow>/mgp setup rename <карта> <новый id> [название]</yellow> — переименовать карту",
+                    "<yellow>/mgp setup name <карта> <название></yellow> — только название для игроков (MiniMessage, например <green>Джунгли)",
                     "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
@@ -280,6 +281,13 @@ public final class MgpCommand implements TabExecutor {
                 }
                 case "optimize" -> optimizeMap(p, a);
                 case "rename" -> renameMap(p, a);
+                case "name" -> {
+                    need(a, 3);
+                    String nm = String.join(" ", Arrays.copyOfRange(a, 2, a.length));
+                    edit(p, a, 3, y -> y.set("display-name", nm), "Название карты для игроков: ");
+                    MapConfig upd = plugin.registry().map(a[1]);
+                    if (upd != null) p.sendMessage(Msg.parse(upd.displayName, Map.of()));
+                }
                 case "biome" -> {
                     need(a, 3);
                     String b = a[2].toLowerCase(Locale.ROOT);
@@ -640,7 +648,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "biome", "plot", "trigger", "waiting", "lobby", "info"));
+                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "name", "biome", "plot", "trigger", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 if (a[1].equalsIgnoreCase("lobby")) out.add("default");
