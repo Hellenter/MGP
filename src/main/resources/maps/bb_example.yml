@@ -1,0 +1,7 @@
+mode: build_battle
+display-name: "<aqua>Классическая арена"
+icon: BRICKS
+template: bb_classic
+plots:                             # участки: углы и точка появления
+  - { min: "0 60 0",  max: "20 90 20",  spawn: "10.5 61 10.5" }
+  - { min: "40 60 0", max: "60 90 20",  spawn: "50.5 61 10.5" }

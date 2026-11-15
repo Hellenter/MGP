@@ -1,0 +1,23 @@
+name: MGP
+version: '${version}'
+main: ru.mgp.MGPPlugin
+api-version: '26.1'
+description: Миниигры в стиле Hypixel
+commands:
+  mgp:
+    description: Главная команда миниигр
+    usage: /mgp help
+  leave:
+    description: Выйти из игры в главное лобби
+    aliases: [hub, l]
+  play:
+    description: Открыть меню игр
+  server:
+    description: Перейти на другой сервер сети
+    usage: /server [id]
+  smp:
+    description: Перейти на сервер выживания SMP (нужен мод EAM)
+permissions:
+  mgp.admin:
+    description: Настройка карт, принудительный старт, перезагрузка
+    default: op
