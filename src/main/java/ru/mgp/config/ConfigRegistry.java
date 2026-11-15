@@ -79,7 +79,7 @@ public final class ConfigRegistry {
 
     public List<MapConfig> mapsFor(String modeId) {
         List<MapConfig> out = new ArrayList<>();
-        for (MapConfig m : maps.values()) if (m.mode.equalsIgnoreCase(modeId)) out.add(m);
+        for (MapConfig m : maps.values()) if (m.playableIn(modeId)) out.add(m);
         return out;
     }
 

@@ -35,7 +35,9 @@ public final class VisibilityService {
         GameSession b = plugin.sessions().of(target);
         if (a != b) return false;
         if (a == null) return true;
-        return !a.isSpectator(target.getUniqueId()) || a.isSpectator(viewer.getUniqueId());
+        if (a.isSpectator(target.getUniqueId()) && !a.isSpectator(viewer.getUniqueId())) return false;
+        if (a.isPlaying() && a.logic() != null && !a.isSpectator(viewer.getUniqueId())) return a.logic().canSee(viewer, target);
+        return true;
     }
 
     /** Для чата: одна и та же «комната». */

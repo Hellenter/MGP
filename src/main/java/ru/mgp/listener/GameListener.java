@@ -187,6 +187,14 @@ public final class GameListener implements Listener {
         if (s != null && !active(s, e.getPlayer())) e.setCancelled(true);
     }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {
+        GameSession s = of(e.getPlayer());
+        if (s == null) return;
+        if (!active(s, e.getPlayer())) { e.setCancelled(true); return; }
+        s.logic().onAttackEntity(e);
+    }
+
     private static Player damager(EntityDamageEvent e) {
         if (!(e instanceof EntityDamageByEntityEvent ee)) return null;
         Entity d = ee.getDamager();

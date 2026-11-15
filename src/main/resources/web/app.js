@@ -515,6 +515,7 @@ function mapTabs(d) {
     'Основное': () => [
       card('Карта', fields(d, [
         { k: 'mode', l: 'Режим', t: 'select', opts: () => S.meta.modes },
+        { k: 'also-modes', l: 'Ещё режимы (по одному на строку)', t: 'lines', rows: 2, hint: 'Карта будет и в этих режимах. Например, карта пряток hide_and_seek может играться и в prop_hunt.' },
         { k: 'display-name', l: 'Название', t: 'mm' },
         { k: 'icon', l: 'Иконка', t: 'material' },
         { k: 'template', l: 'Шаблон мира', list: 'dl-templates', hint: 'Папка в plugins/MGP/templates (в игре: /mgp setup export <имя>)' },
@@ -526,6 +527,7 @@ function mapTabs(d) {
         { k: 'center', l: 'Центр карты', ph: 'x y z' },
         { k: 'border-size', l: 'Размер барьера', t: 'num', hint: '0 — без барьера' },
         { k: 'spectator', l: 'Точка наблюдателей', ph: 'x y z yaw pitch' },
+        { k: 'seeker-spawn', l: 'Комната ищущих (прятки)', ph: 'x y z yaw pitch', hint: 'Где ищущие ждут, пока все прячутся. Пусто — ждут на спавнах карты. В игре: /mgp setup seekerspawn <карта>' },
       ])),
       card('Мир карты', fields(d, [
         { k: 'biome', l: 'Биом на всю карту', list: 'dl-biomes', ph: 'как в шаблоне', hint: 'Например plains, snowy_plains, desert. Пусто — биомы из шаблона. В игре: /mgp setup biome <карта> <биом>' },

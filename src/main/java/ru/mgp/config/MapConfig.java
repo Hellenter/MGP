@@ -22,6 +22,8 @@ public final class MapConfig {
     public final File file;
     public final YamlConfiguration yaml;
     public final String mode;
+    /** Дополнительные режимы, в которых тоже играется карта (also-modes). */
+    public final List<String> alsoModes = new ArrayList<>();
     public final String displayName;
     public final Material icon;
     public final String template;
@@ -40,11 +42,18 @@ public final class MapConfig {
     public final List<Trigger> triggers = new ArrayList<>();
     public final List<Plot> plots = new ArrayList<>();
 
+    public boolean playableIn(String modeId) {
+        if (mode.equalsIgnoreCase(modeId)) return true;
+        for (String am : alsoModes) if (am.equalsIgnoreCase(modeId)) return true;
+        return false;
+    }
+
     public MapConfig(String id, File file, YamlConfiguration y) {
         this.id = id;
         this.file = file;
         this.yaml = y;
         this.mode = y.getString("mode", "");
+        for (String am : y.getStringList("also-modes")) if (!am.isBlank()) alsoModes.add(am.trim().toLowerCase(java.util.Locale.ROOT));
         this.displayName = y.getString("display-name", id);
         this.icon = Cfg.material(y.getString("icon"), Material.FILLED_MAP);
         this.template = y.getString("template", id);

@@ -203,6 +203,8 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup spawns <карта></yellow> — список спавнов с номерами",
                     "<yellow>/mgp setup clearspawns <карта></yellow> — удалить все спавны",
                     "<yellow>/mgp setup spectator <карта></yellow> — точка наблюдателей",
+                    "<yellow>/mgp setup seekerspawn <карта> [none]</yellow> — комната ищущих в прятках",
+                    "<yellow>/mgp setup alsomode <карта> <режим|-режим></yellow> — карта играется и в другом режиме",
                     "<yellow>/mgp setup center <карта> [размер барьера]",
                     "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
                     "<yellow>/mgp setup trader <карта> <набор сделок> [профессия]",
@@ -254,6 +256,23 @@ public final class MgpCommand implements TabExecutor {
                 case "spawns" -> listSpawns(p, a);
                 case "clearspawns" -> edit(p, a, 2, y -> y.set("spawns", new ArrayList<String>()), "Спавны очищены");
                 case "spectator" -> edit(p, a, 2, y -> y.set("spectator", Pos.of(loc).serialize()), "Точка наблюдателей задана");
+                case "seekerspawn" -> edit(p, a, 2, y -> {
+                    if (a.length > 2 && a[2].equalsIgnoreCase("none")) y.set("seeker-spawn", null);
+                    else y.set("seeker-spawn", Pos.of(loc).serialize());
+                }, "Комната ищущих задана (none — убрать)");
+                case "alsomode" -> {
+                    need(a, 3);
+                    String md = a[2].toLowerCase(Locale.ROOT);
+                    boolean remove = md.startsWith("-");
+                    String id = remove ? md.substring(1) : md;
+                    if (!remove && plugin.registry().mode(id) == null) { Msg.send(p, "<red>Нет режима " + id); return; }
+                    edit(p, a, 3, y -> {
+                        List<String> l = new ArrayList<>(y.getStringList("also-modes"));
+                        l.remove(id);
+                        if (!remove) l.add(id);
+                        y.set("also-modes", l.isEmpty() ? null : l);
+                    }, remove ? "Режим " + id + " убран у карты" : "Карта теперь играется и в режиме " + id);
+                }
                 case "center" -> edit(p, a, 2, y -> {
                     y.set("center", Pos.ofBlock(loc).serialize());
                     if (a.length > 2) y.set("border-size", Double.parseDouble(a[2]));
@@ -647,13 +666,15 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 2 && a[0].equalsIgnoreCase("join")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
-                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
+                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
                         "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "name", "biome", "plot", "trigger", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 if (a[1].equalsIgnoreCase("lobby")) out.add("default");
                 else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))
                     plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("alsomode")) {
+                plugin.registry().modes().forEach(m -> { out.add(m.id); out.add("-" + m.id); });
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("biome")) {
                 out.add("none");
                 out.addAll(ru.mgp.world.WorldService.biomeIds());

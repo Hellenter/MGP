@@ -50,6 +50,12 @@ public abstract class GameLogic {
     public void onMove(PlayerMoveEvent e) {}
     public void onInteract(PlayerInteractEvent e) {}
 
+    /** Удар игрока по сущности (до проверок ванили) — например, по хитбоксу маскировки. */
+    public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {}
+
+    /** Дополнительное правило видимости между игроками одной идущей игры. */
+    public boolean canSee(Player viewer, Player target) { return true; }
+
     /** Нажатие служебного предмета с меткой "logic:<payload>". */
     public void onHotbar(Player p, String payload) {}
 
