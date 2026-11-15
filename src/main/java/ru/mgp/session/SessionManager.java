@@ -50,12 +50,40 @@ public final class SessionManager {
             Msg.send(p, problem);
             return;
         }
-        GameSession current = of(p);
-        if (current != null) current.removePlayer(p, false);
+        // Пати: игры запускает лидер, вся пати попадает в одну арену (как на Hypixel)
+        ru.mgp.party.Party party = plugin.parties().of(p);
+        List<Player> group = new ArrayList<>(List.of(p));
+        if (party != null && party.size() > 1) {
+            if (!party.isLeader(p.getUniqueId())) {
+                ru.mgp.party.PartyService.msg(p, "<red>Игры запускает лидер пати. Выйти из пати: <yellow>/p leave");
+                return;
+            }
+            for (Player m : plugin.parties().online(party)) {
+                if (m.equals(p)) continue;
+                GameSession ms = of(m);
+                if (ms != null && (ms.isPlaying() || ms.state() == GameSession.State.ENDING)) {
+                    ru.mgp.party.PartyService.msg(p, "<yellow>" + Msg.esc(m.getName()) + " <gray>сейчас в игре — зайдёт, когда освободится.");
+                    continue;
+                }
+                group.add(m);
+            }
+            if (group.size() > mode.maxPlayers) {
+                ru.mgp.party.PartyService.msg(p, "<red>В пати " + group.size() + " игроков, а в этом режиме максимум " + mode.maxPlayers + ".");
+                return;
+            }
+        }
 
+        // своё лобби ожидания этого режима подходит, если в нём хватит места остальным
+        GameSession current = of(p);
         GameSession best = null;
-        for (GameSession s : sessions) {
-            if (!s.mode.id.equals(mode.id) || !s.canJoin()) continue;
+        if (current != null && current.mode.id.equals(mode.id)) {
+            int need = (int) group.stream().filter(m -> !current.hasPlayer(m)).count();
+            if (current.canJoin(need)) best = current;
+        }
+        if (best == null && current != null) current.removePlayer(p, false);
+
+        if (best == null) for (GameSession s : sessions) {
+            if (!s.mode.id.equals(mode.id) || !s.canJoin(group.size())) continue;
             if (best == null || s.size() > best.size()) best = s; // сначала заполняем самые полные лобби
         }
         if (best == null) {
@@ -69,11 +97,18 @@ public final class SessionManager {
             sessions.add(best);
             best.create();
         }
-        if (!best.addPlayer(p)) {
-            Msg.send(p, best.state() == GameSession.State.CLOSED
-                    ? "<red>Не удалось подготовить арену" + (p.hasPermission("mgp.admin") ? " — причина в консоли сервера (logs/latest.log)." : ", попробуй позже.")
-                    : "<red>Не удалось присоединиться: арена уже заполнена или стартует. Попробуй ещё раз.");
-            plugin.hub().send(p);
+        for (Player m : group) {
+            if (best.hasPlayer(m)) continue;
+            GameSession ms = of(m);
+            if (ms != null) ms.removePlayer(m, false);
+            if (!best.addPlayer(m)) {
+                Msg.send(m, best.state() == GameSession.State.CLOSED
+                        ? "<red>Не удалось подготовить арену" + (m.hasPermission("mgp.admin") ? " — причина в консоли сервера (logs/latest.log)." : ", попробуй позже.")
+                        : "<red>Не удалось присоединиться: арена уже заполнена или стартует. Попробуй ещё раз.");
+                plugin.hub().send(m);
+            } else if (m != p) {
+                ru.mgp.party.PartyService.msg(m, "<gray>Лидер пати <yellow>" + Msg.esc(p.getName()) + " <gray>зашёл в " + mode.displayName + "<gray> — ты с ним.");
+            }
         }
     }
 

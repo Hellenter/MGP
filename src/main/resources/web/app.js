@@ -527,6 +527,10 @@ function mapTabs(d) {
         { k: 'border-size', l: 'Размер барьера', t: 'num', hint: '0 — без барьера' },
         { k: 'spectator', l: 'Точка наблюдателей', ph: 'x y z yaw pitch' },
       ])),
+      card('Мир карты', fields(d, [
+        { k: 'biome', l: 'Биом на всю карту', list: 'dl-biomes', ph: 'как в шаблоне', hint: 'Например plains, snowy_plains, desert. Пусто — биомы из шаблона. В игре: /mgp setup biome <карта> <биом>' },
+      ]), h('div', { class: 'hint muted', style: 'margin:10px 0 8px' }, 'Геймрулы только для этой карты (важнее геймрулов режима). По умолчанию во всех мирах игр random_tick_speed 0 — config.yml → worlds.default-gamerules.'),
+        kvEditor(d, 'gamerules', { list: 'dl-gamerules', prompt: 'Id геймрула, например random_tick_speed:', def: false, addText: 'геймрул' })),
     ],
     'Спавны и сундуки': () => [
       card('Спавны игроков', fields(d, [{ k: 'spawns', l: 'x y z yaw pitch — по одному на строку', t: 'lines', rows: 10,
@@ -760,6 +764,7 @@ async function pageEditor(main, kind, id) {
   const body = h('div');
   const saveBtn = h('button', { id: 'save-btn', class: 'primary', disabled: true, onclick: save }, 'Сохранить');
   const head = h('div', { class: 'page-head' }, h('h1', null, title), h('span', { id: 'save-status', class: 'status' }, ''),
+    kind === 'map' ? h('button', { onclick: rename }, 'Переименовать') : null,
     kind !== 'config' ? h('button', { class: 'danger', onclick: del }, 'Удалить') : null, saveBtn);
   const tabBar = h('div', { class: 'tabs' });
   put(main, h('div', { class: 'page' }, head, tabBar, body));
@@ -802,6 +807,16 @@ async function pageEditor(main, kind, id) {
       await refreshLists();
     } catch (e) { saveBtn.disabled = false; toast(e.message, true); }
   }
+  async function rename() {
+    if (S.dirty && !confirm('Несохранённые изменения будут потеряны. Продолжить?')) return;
+    const to = (prompt(`Новый id карты «${id}» (a-z, 0-9 и _). Спавны, сундуки и шаблон перенесутся.`, id) || '').trim().toLowerCase();
+    if (!to || to === id) return;
+    const name = prompt('Новое название (MiniMessage). Оставь пустым, чтобы не менять.', '') || '';
+    try {
+      const r = await api('POST', `maps/${id}/rename`, { to, name: name.trim() || null });
+      S.dirty = false; toast(r.message); await refreshLists(); location.hash = '#/map/' + r.map;
+    } catch (e) { toast(e.message, true); }
+  }
   async function del() {
     if (!confirm(`Удалить ${kind === 'mode' ? 'режим' : 'карту'} «${id}»? Файл будет удалён.`)) return;
     try { await api('DELETE', path); S.dirty = false; toast('Удалено'); await refreshLists(); location.hash = '#/overview'; } catch (e) { toast(e.message, true); }
@@ -830,7 +845,7 @@ async function boot() {
   } catch (e) { if (!$('.login')) showLogin(e.message); return; }
   const fill = (id, arr) => put($(id), ...arr.map((v) => h('option', { value: v })));
   fill('#dl-materials', S.meta.materials); fill('#dl-templates', S.meta.templates); fill('#dl-effects', S.meta.effects);
-  fill('#dl-professions', S.meta.professions); fill('#dl-gamerules', S.meta.gamerules); fill('#dl-modes', S.meta.modes);
+  fill('#dl-professions', S.meta.professions); fill('#dl-gamerules', S.meta.gamerules); fill('#dl-biomes', S.meta.biomes || []); fill('#dl-modes', S.meta.modes);
   put($('#app'), h('div', { class: 'layout' }, h('aside', { id: 'nav', class: 'nav' }), h('main', { id: 'main' })));
   await refreshLists();
   if (!location.hash.startsWith('#/')) location.hash = '#/overview';

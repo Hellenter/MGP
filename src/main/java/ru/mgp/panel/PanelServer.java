@@ -221,6 +221,16 @@ public final class PanelServer {
                 if (p.length == 1 && m.equals("POST")) return create(kind, body);
                 String id = id(p[1]);
                 File f = file(kind, id);
+                if (kind.equals("map") && p.length == 3 && p[2].equals("rename") && m.equals("POST")) {
+                    need(body != null, "Нет данных");
+                    String name = body.has("name") && !body.get("name").isJsonNull() ? body.get("name").getAsString() : null;
+                    try {
+                        String msg = ru.mgp.world.MapRenamer.rename(plugin, id, str(body, "to"), name);
+                        return Json.obj("ok", true, "map", plugin.registry().map(str(body, "to")).id, "message", msg);
+                    } catch (IllegalArgumentException | IllegalStateException e) {
+                        throw new ApiException(400, e.getMessage());
+                    }
+                }
                 switch (m) {
                     case "GET": return read(f);
                     case "PUT": return save(kind, id, f, body);
@@ -362,6 +372,7 @@ public final class PanelServer {
         o.add("effects", Json.strings(reg.getRegistry(RegistryKey.MOB_EFFECT).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         o.add("enchantments", Json.strings(reg.getRegistry(RegistryKey.ENCHANTMENT).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         o.add("professions", Json.strings(reg.getRegistry(RegistryKey.VILLAGER_PROFESSION).keyStream().map(NamespacedKey::getKey).sorted().toList()));
+        o.add("biomes", Json.strings(ru.mgp.world.WorldService.biomeIds()));
         o.add("gamerules", Json.strings(reg.getRegistry(RegistryKey.GAME_RULE).keyStream().map(NamespacedKey::getKey).sorted().toList()));
         return o;
     }

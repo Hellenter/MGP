@@ -15,6 +15,13 @@ commands:
   server:
     description: Перейти на другой сервер сети
     usage: /server [id]
+  party:
+    description: Пати с друзьями (/p <ник> — пригласить)
+    usage: /party help
+    aliases: [p]
+  pc:
+    description: Чат пати
+    usage: /pc <сообщение>
   smp:
     description: Перейти на сервер выживания SMP (нужен мод EAM)
 permissions:

@@ -55,6 +55,7 @@ public final class MGPPlugin extends JavaPlugin {
         visibility = new VisibilityService(this);
         sidebars = new SidebarService(this);
         sessions = new SessionManager(this);
+        parties = new ru.mgp.party.PartyService(this);
 
         var pm = Bukkit.getPluginManager();
         pm.registerEvents(new MenuListener(this), this);
@@ -62,9 +63,15 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(new GameListener(this), this);
 
         MgpCommand cmd = new MgpCommand(this);
+        this.mgpCommand = cmd;
         for (String name : new String[]{"mgp", "leave", "play"}) {
             PluginCommand c = getCommand(name);
             if (c != null) { c.setExecutor(cmd); c.setTabCompleter(cmd); }
+        }
+        ru.mgp.party.PartyCommand partyCmd = new ru.mgp.party.PartyCommand(this);
+        for (String name : new String[]{"party", "pc"}) {
+            PluginCommand c = getCommand(name);
+            if (c != null) { c.setExecutor(partyCmd); c.setTabCompleter(partyCmd); }
         }
         ServerCommand serverCmd = new ServerCommand(this);
         for (String name : new String[]{"server", "smp"}) {
@@ -79,8 +86,11 @@ public final class MGPPlugin extends JavaPlugin {
         for (Player p : Bukkit.getOnlinePlayers()) hub.send(p);
     }
 
+    private MgpCommand mgpCommand;
+
     @Override
     public void onDisable() {
+        if (mgpCommand != null) mgpCommand.shutdown();
         if (panel != null) panel.stop();
         if (sessions != null) sessions.shutdown();
     }
@@ -95,6 +105,9 @@ public final class MGPPlugin extends JavaPlugin {
     public WorldService worlds() { return worlds; }
     public ConfigRegistry registry() { return registry; }
     public SessionManager sessions() { return sessions; }
+
+    private ru.mgp.party.PartyService parties;
+    public ru.mgp.party.PartyService parties() { return parties; }
     public HubService hub() { return hub; }
     public VisibilityService visibility() { return visibility; }
     public SidebarService sidebars() { return sidebars; }
