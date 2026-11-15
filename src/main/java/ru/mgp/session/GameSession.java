@@ -150,11 +150,16 @@ public final class GameSession {
 
     // ------------------------------------------------------------------ игроки
 
-    public boolean canJoin() {
+    public boolean canJoin() { return canJoin(1); }
+
+    /** Поместится ли ещё count игроков (для пати). */
+    public boolean canJoin(int count) {
         return (state == State.CREATING || state == State.WAITING || state == State.STARTING)
-                && players.size() < mode.maxPlayers
+                && players.size() + count <= mode.maxPlayers
                 && !(state == State.STARTING && countdown <= 2);
     }
+
+    public boolean hasPlayer(Player p) { return players.contains(p.getUniqueId()); }
 
     public boolean addPlayer(Player p) {
         if (!canJoin()) return false;

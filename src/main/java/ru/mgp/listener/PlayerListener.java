@@ -32,12 +32,14 @@ public final class PlayerListener implements Listener {
     public void onJoin(PlayerJoinEvent e) {
         plugin.hub().send(e.getPlayer());
         plugin.sidebars().update(e.getPlayer());
+        plugin.parties().onJoin(e.getPlayer());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         plugin.sessions().quit(e.getPlayer());
         plugin.sidebars().remove(e.getPlayer());
+        plugin.parties().onQuit(e.getPlayer());
     }
 
     // ------------------------------------------------------------- служебные предметы
@@ -53,6 +55,10 @@ public final class PlayerListener implements Listener {
         GameSession s = plugin.sessions().of(p);
         switch (tag) {
             case Hotbar.SELECTOR -> new GameSelectorMenu(plugin).open(p);
+            case Hotbar.PARTY -> {
+                Long t = partyClick.get(p.getUniqueId());
+                if (t == null || System.currentTimeMillis() - t > 300) new ru.mgp.party.PartyMenu(plugin, p).open(p);
+            }
             case Hotbar.LEAVE -> plugin.sessions().leave(p);
             case Hotbar.VOTE -> { if (s != null) VoteMenu.openFor(p, s); }
             case Hotbar.KIT -> { if (s != null) new KitMenu(s, p).open(p); }
@@ -63,6 +69,20 @@ public final class PlayerListener implements Listener {
                     plugin.servers().transfer(p, tag.substring(ru.mgp.network.LinkedServers.TAG_PREFIX.length()));
             }
         }
+    }
+
+    private final java.util.Map<java.util.UUID, Long> partyClick = new java.util.HashMap<>();
+
+    /** ПКМ предметом «Пати» по игроку — пригласить его. */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onPartyItemOnPlayer(PlayerInteractEntityEvent e) {
+        if (e.getHand() != EquipmentSlot.HAND || !(e.getRightClicked() instanceof Player target)) return;
+        Player p = e.getPlayer();
+        if (!Hotbar.PARTY.equals(Keys.tag(p.getInventory().getItemInMainHand()))) return;
+        e.setCancelled(true);
+        partyClick.put(p.getUniqueId(), System.currentTimeMillis()); // клиент следом шлёт «ПКМ в воздух» — меню не открываем
+        if (target.hasMetadata("NPC")) return;
+        plugin.parties().invite(p, target);
     }
 
     @EventHandler(ignoreCancelled = true)
