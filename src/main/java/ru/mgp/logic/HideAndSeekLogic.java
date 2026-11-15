@@ -97,6 +97,10 @@ public final class HideAndSeekLogic extends GameLogic {
     @Override
     public void onStart() {
         List<Player> all = new ArrayList<>(session.alivePlayers());
+        if (all.size() < 2) { // например, /mgp start в одиночку: ни прятаться, ни искать
+            session.end(List.of(), "<red>Для пряток нужно хотя бы 2 игрока.");
+            return;
+        }
         Collections.shuffle(all, session.random());
         var st = session.mode.settings;
         int n = Math.max(st.getInt("seekers", 1), (int) Math.round(all.size() * st.getDouble("seeker-ratio", 0)));

@@ -12,7 +12,8 @@ import java.util.*;
 /** Карта: maps/<id>.yml. Координаты задаются без мира — карта копируется в новый мир на каждую игру. */
 public final class MapConfig {
     public record ChestSpot(Pos pos, String tier) {}
-    public record TraderSpot(Pos pos, String set, String name, String profession) {}
+    /** Продавец: set — сделки жителя из trades режима, shop — магазин из shops/*.yml (одно из двух). */
+    public record TraderSpot(Pos pos, String set, String name, String profession, String shop) {}
     public record Trigger(String name, Region region, Mode mode, List<String> actions) {
         public enum Mode { ONCE, PER_PLAYER, REPEAT }
     }
@@ -85,7 +86,7 @@ public final class MapConfig {
         for (Map<?, ?> raw : y.getMapList("traders")) {
             Map<String, Object> m = Cfg.asMap(raw);
             traders.add(new TraderSpot(Pos.parse(Cfg.str(m, "pos", null)), Cfg.str(m, "set", "default"),
-                    Cfg.str(m, "name", "<yellow>Торговец"), Cfg.str(m, "profession", "librarian")));
+                    Cfg.str(m, "name", "<yellow>Торговец"), Cfg.str(m, "profession", "librarian"), Cfg.str(m, "shop", null)));
         }
         for (Map<?, ?> raw : y.getMapList("triggers")) {
             Map<String, Object> m = Cfg.asMap(raw);

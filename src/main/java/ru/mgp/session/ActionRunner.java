@@ -40,13 +40,32 @@ import java.util.*;
  *   teleport: x y z [yaw pitch]  — телепорт в мире игры (без yaw/pitch — взгляд не меняется)
  *   particle: <тип> [кол-во] [x y z] — частицы у игрока или в точке
  *   setblock: x y z <блок>       — поставить блок в мире игры (AIR — убрать)
+ *   wait: <сек>                  — пауза: следующие действия выполнятся позже
  */
 public final class ActionRunner {
     private ActionRunner() {}
 
     public static void run(GameSession s, List<String> actions, Player target) {
         if (actions == null) return;
-        for (String raw : actions) {
+        for (int n = 0; n < actions.size(); n++) {
+            String raw = actions.get(n);
+            // wait: <сек> — остальные действия выполнятся позже (если игра ещё идёт и игрок в ней)
+            if (raw.trim().toLowerCase(Locale.ROOT).startsWith("wait")) {
+                double sec;
+                try {
+                    sec = Double.parseDouble(raw.substring(raw.indexOf(':') + 1).trim().replace(',', '.'));
+                } catch (Exception e) {
+                    s.plugin().getLogger().warning("Ошибка в действии '" + raw + "': ожидалось wait: <секунды>");
+                    continue;
+                }
+                List<String> rest = List.copyOf(actions.subList(n + 1, actions.size()));
+                Bukkit.getScheduler().runTaskLater(s.plugin(), () -> {
+                    if (!s.isPlaying()) return;
+                    if (target != null && (!target.isOnline() || !s.isAlive(target))) return;
+                    run(s, rest, target);
+                }, Math.max(1L, Math.round(sec * 20)));
+                return;
+            }
             try {
                 runOne(s, raw, target);
             } catch (Exception e) {
@@ -137,6 +156,7 @@ public final class ActionRunner {
                     pl.teleport(to);
                     pl.setFallDistance(0);
                     MapScripts.particle(world, "PORTAL", to.clone().add(0, 1, 0), 40, 0.4);
+                    world.playSound(to, org.bukkit.Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
                 }
             }
             case "particle", "particles" -> {

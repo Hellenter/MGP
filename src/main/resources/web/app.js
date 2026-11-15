@@ -543,9 +543,10 @@ function mapTabs(d) {
     ],
     'Торговцы': () => [card('Торговцы', listEditor(d, 'traders', {
       addText: 'торговца', make: () => ({ pos: '0.5 64 0.5', set: 'default', name: '<yellow>Торговец', profession: 'librarian' }),
-      summary: (t) => [mmPreview(t.name), ' ', h('span', { class: 'badge' }, t.set)],
+      summary: (t) => [mmPreview(t.name), ' ', h('span', { class: 'badge' }, t.shop ? 'магазин ' + t.shop : t.set)],
       body: (t) => fields(t, [
         { k: 'pos', l: 'Позиция', ph: 'x y z yaw pitch' },
+        { k: 'shop', l: 'Магазин (id из plugins/MGP/shops)', hint: 'Магазин в стиле Bed Wars. Если задан, набор сделок не нужен. В игре: /mgp shop' },
         { k: 'set', l: 'Набор сделок (id из режима)' },
         { k: 'name', l: 'Имя', t: 'mm' },
         { k: 'profession', l: 'Профессия', list: 'dl-professions' },

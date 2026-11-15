@@ -56,11 +56,16 @@ public final class MGPPlugin extends JavaPlugin {
         sidebars = new SidebarService(this);
         sessions = new SessionManager(this);
         parties = new ru.mgp.party.PartyService(this);
+        shops = new ru.mgp.shop.ShopService(this);
+        shops.load();
 
         var pm = Bukkit.getPluginManager();
         pm.registerEvents(new MenuListener(this), this);
         pm.registerEvents(new PlayerListener(this), this);
         pm.registerEvents(new GameListener(this), this);
+        wand = new ru.mgp.editor.ScriptWand(this);
+        pm.registerEvents(wand, this);
+        pm.registerEvents(shops, this);
 
         MgpCommand cmd = new MgpCommand(this);
         this.mgpCommand = cmd;
@@ -91,6 +96,7 @@ public final class MGPPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (mgpCommand != null) mgpCommand.shutdown();
+        if (wand != null) wand.shutdown();
         if (panel != null) panel.stop();
         if (sessions != null) sessions.shutdown();
     }
@@ -100,6 +106,7 @@ public final class MGPPlugin extends JavaPlugin {
         Msg.setPrefix(getConfig().getString("prefix", ""));
         registry.load();
         servers.load();
+        shops.load();
     }
 
     public WorldService worlds() { return worlds; }
@@ -114,4 +121,10 @@ public final class MGPPlugin extends JavaPlugin {
     public PanelServer panel() { return panel; }
     public MapImporter importer() { return importer; }
     public LinkedServers servers() { return servers; }
+
+    private ru.mgp.shop.ShopService shops;
+    public ru.mgp.shop.ShopService shops() { return shops; }
+
+    private ru.mgp.editor.ScriptWand wand;
+    public ru.mgp.editor.ScriptWand wand() { return wand; }
 }

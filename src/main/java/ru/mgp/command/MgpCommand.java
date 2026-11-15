@@ -92,6 +92,21 @@ public final class MgpCommand implements TabExecutor {
                 Msg.send(p, "<green>Спавн хаба: " + p.getWorld().getName() + " " + pos.serialize() + ". Сюда попадают при входе, после игры и по /hub.");
             }
             case "rename" -> { if (admin(sender)) renameMap(sender, a); }
+            case "shop", "shops" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                if (a.length > 1) {
+                    ru.mgp.shop.Shop sh = plugin.shops().get(a[1]);
+                    if (sh == null) sh = plugin.shops().create(a[1]);
+                    if (sh == null) { Msg.send(p, "<red>Неверный id магазина"); return true; }
+                    new ru.mgp.shop.ShopEditMenu(plugin.shops(), sh, 0).open(p);
+                } else new ru.mgp.shop.ShopListMenu(plugin.shops()).open(p);
+            }
+            case "wand" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                plugin.wand().give(p, a.length > 1 ? a[1] : null);
+            }
             case "hotbar" -> {
                 if (!admin(sender) || !(sender instanceof Player p)) return true;
                 boolean hide = a.length > 1 ? a[1].equalsIgnoreCase("off") : !ru.mgp.ui.Hotbar.hubHidden(p);
@@ -184,6 +199,8 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp setup</gold> — список команд настройки карт");
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
+            Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
+            Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
             Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
             Msg.send(s, "<gold>/mgp optimize <карта></gold> — оптимизация границ готовой карты: обрезать края, где только воздух");
         }
@@ -680,7 +697,6 @@ public final class MgpCommand implements TabExecutor {
             case "tphere" -> editScript(p, a, id, false, m -> {
                 List<String> acts = actions(m);
                 acts.add("teleport: " + Pos.of(p.getLocation()).serialize());
-                acts.add("sound: minecraft:entity.enderman.teleport");
                 m.put("actions", acts);
             }, "Добавлен телепорт в " + Pos.of(p.getLocation()).serialize());
             case "action" -> {
@@ -782,10 +798,12 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "debug"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
                 out.addAll(List.of("on", "off"));
-            } else if (a.length == 2 && (a[0].equalsIgnoreCase("optimize") || a[0].equalsIgnoreCase("rename"))) {
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("shop")) {
+                plugin.shops().all().forEach(x -> out.add(x.id));
+            } else if (a.length == 2 && (a[0].equalsIgnoreCase("optimize") || a[0].equalsIgnoreCase("rename") || a[0].equalsIgnoreCase("wand"))) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("import")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));

@@ -96,7 +96,7 @@ public final class MapScripts {
 
             // удержание Shift
             if (holdHere == null || !available(holdHere, p)) {
-                if (holdHere != null && hintFrame) p.sendActionBar(Msg.parse("<gray>Перезарядка: " + cooldownLeft(holdHere, p) + " сек."));
+                if (holdHere != null && hintFrame) p.sendActionBar(Msg.parse(unavailableText(holdHere, p)));
                 cancelHold(p, holdTicks.getOrDefault(u, 0) > 6);
                 continue;
             }
@@ -169,7 +169,7 @@ public final class MapScripts {
             if (sc.type() != type || sc.block().bx() != b.getX() || sc.block().by() != b.getY() || sc.block().bz() != b.getZ()) continue;
             if (sc.cancelUse()) e.setCancelled(true);
             if (!available(sc, e.getPlayer())) {
-                if (type == Script.Type.BUTTON) e.getPlayer().sendActionBar(Msg.parse("<gray>Пока недоступно (" + cooldownLeft(sc, e.getPlayer()) + " сек.)"));
+                if (type == Script.Type.BUTTON) e.getPlayer().sendActionBar(Msg.parse(unavailableText(sc, e.getPlayer())));
                 return;
             }
             fire(sc, e.getPlayer());
@@ -187,6 +187,12 @@ public final class MapScripts {
             default -> {}
         }
         return p == null || cooldownLeft(sc, p) == 0;
+    }
+
+    /** Почему нельзя: перезарядка или уже использовано (режимы once / per-player). */
+    private String unavailableText(Script sc, Player p) {
+        long left = cooldownLeft(sc, p);
+        return left > 0 ? "<gray>Перезарядка: <white>" + left + " сек." : "<gray>Уже использовано";
     }
 
     private long cooldownLeft(Script sc, Player p) {

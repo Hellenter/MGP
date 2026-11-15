@@ -1,0 +1,52 @@
+# Пример магазина в стиле Bed Wars (Hypixel). Править удобнее в игре: /mgp shop bedwars
+# Продавца ставит кнопка «Поставить продавца здесь» в редакторе (запишется в maps/<карта>.yml → traders).
+# item — предмет: "WHITE_WOOL 16" или {material: STONE_SWORD, enchants: {sharpness: 1}, name: "...", unbreakable: true}
+# price — "<валюта> <сколько>": IRON_INGOT, GOLD_INGOT, DIAMOND, EMERALD или любой другой предмет.
+title: "<dark_gray>Магазин предметов"
+npc-name: "<aqua><bold>МАГАЗИН ПРЕДМЕТОВ"
+profession: weaponsmith
+categories:
+  - name: "<yellow>Блоки"
+    icon: TERRACOTTA
+    items:
+      - { item: "WHITE_WOOL 16", price: "IRON_INGOT 4" }
+      - { item: "TERRACOTTA 16", price: "IRON_INGOT 12" }
+      - { item: "GLASS 4", price: "IRON_INGOT 12" }
+      - { item: "END_STONE 12", price: "IRON_INGOT 24" }
+      - { item: "LADDER 8", price: "IRON_INGOT 4" }
+      - { item: "OAK_PLANKS 16", price: "GOLD_INGOT 4" }
+      - { item: "OBSIDIAN 4", price: "EMERALD 4" }
+  - name: "<gold>Оружие"
+    icon: GOLDEN_SWORD
+    items:
+      - { item: { material: STONE_SWORD, unbreakable: true }, price: "IRON_INGOT 10" }
+      - { item: { material: IRON_SWORD, unbreakable: true }, price: "GOLD_INGOT 7" }
+      - { item: { material: DIAMOND_SWORD, unbreakable: true }, price: "EMERALD 4" }
+      - { item: { material: STICK, name: "<white>Палка отбрасывания", enchants: { knockback: 1 } }, price: "GOLD_INGOT 5" }
+  - name: "<aqua>Броня"
+    icon: CHAINMAIL_BOOTS
+    items:
+      - { item: { material: CHAINMAIL_CHESTPLATE, unbreakable: true }, price: "IRON_INGOT 24" }
+      - { item: { material: IRON_CHESTPLATE, unbreakable: true }, price: "GOLD_INGOT 12" }
+      - { item: { material: DIAMOND_CHESTPLATE, unbreakable: true }, price: "EMERALD 6" }
+  - name: "<green>Инструменты"
+    icon: STONE_PICKAXE
+    items:
+      - { item: { material: SHEARS, unbreakable: true }, price: "IRON_INGOT 20" }
+      - { item: { material: WOODEN_PICKAXE, enchants: { efficiency: 1 }, unbreakable: true }, price: "IRON_INGOT 10" }
+      - { item: { material: WOODEN_AXE, enchants: { efficiency: 1 }, unbreakable: true }, price: "IRON_INGOT 10" }
+  - name: "<red>Дальний бой"
+    icon: BOW
+    items:
+      - { item: "ARROW 6", price: "GOLD_INGOT 2" }
+      - { item: { material: BOW, unbreakable: true }, price: "GOLD_INGOT 12" }
+      - { item: { material: BOW, enchants: { power: 1 }, unbreakable: true }, price: "GOLD_INGOT 20" }
+  - name: "<light_purple>Полезное"
+    icon: TNT
+    items:
+      - { item: "GOLDEN_APPLE", price: "GOLD_INGOT 3" }
+      - { item: "FIRE_CHARGE", price: "IRON_INGOT 40" }
+      - { item: "TNT", price: "GOLD_INGOT 4" }
+      - { item: "ENDER_PEARL", price: "EMERALD 4" }
+      - { item: "WATER_BUCKET", price: "GOLD_INGOT 3" }
+      - { item: "SNOWBALL 4", price: "IRON_INGOT 16" }

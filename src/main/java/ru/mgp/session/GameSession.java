@@ -590,6 +590,29 @@ public final class GameSession {
     private void spawnTraders() {
         var professions = RegistryAccess.registryAccess().getRegistry(RegistryKey.VILLAGER_PROFESSION);
         for (MapConfig.TraderSpot t : map.traders) {
+            if (t.pos() == null) continue;
+            if (t.shop() != null) {
+                if (plugin.shops().get(t.shop()) == null) {
+                    plugin.getLogger().warning("Нет магазина '" + t.shop() + "' (plugins/MGP/shops) для карты " + map.id);
+                    continue;
+                }
+                Villager v = gameWorld.spawn(t.pos().toLocation(gameWorld), Villager.class, x -> {
+                    x.setAI(false);
+                    x.setInvulnerable(true);
+                    x.setSilent(true);
+                    x.setPersistent(true);
+                    x.setCollidable(false);
+                    if (!"none".equalsIgnoreCase(t.profession())) {
+                        Villager.Profession prof = professions.get(NamespacedKey.minecraft(t.profession().toLowerCase(Locale.ROOT)));
+                        if (prof != null) x.setProfession(prof);
+                    }
+                    x.setVillagerLevel(5);
+                    x.customName(Msg.parse(t.name()));
+                    x.setCustomNameVisible(true);
+                });
+                plugin.shops().tag(v, t.shop());
+                continue;
+            }
             List<TradeSpec> specs = mode.trades.get(t.set());
             if (specs == null) {
                 plugin.getLogger().warning("Нет набора сделок '" + t.set() + "' в режиме " + mode.id);
