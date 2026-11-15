@@ -81,6 +81,30 @@ public final class WorldService {
         return result;
     }
 
+    /**
+     * Запасное лобби ожидания, когда шаблона нет: пустой мир с площадкой 15x15 под точкой спавна.
+     * Завершается сразу, в основном потоке.
+     */
+    public CompletableFuture<World> createPlatform(String worldName, ru.mgp.util.Pos spawn) {
+        try {
+            FileUtil.deleteRecursive(Bukkit.getWorldContainer().toPath().resolve(worldName));
+            World w = new WorldCreator(worldName).generator(new VoidGenerator()).generateStructures(false).createWorld();
+            if (w == null) throw new IllegalStateException("createWorld вернул null");
+            w.setAutoSave(false);
+            int cx = spawn.bx(), cy = spawn.by() - 1, cz = spawn.bz();
+            for (int dx = -7; dx <= 7; dx++) {
+                for (int dz = -7; dz <= 7; dz++) {
+                    boolean edge = Math.abs(dx) == 7 || Math.abs(dz) == 7;
+                    w.getBlockAt(cx + dx, cy, cz + dz).setType(edge ? org.bukkit.Material.LIGHT_BLUE_STAINED_GLASS : org.bukkit.Material.SMOOTH_STONE, false);
+                    if (edge) w.getBlockAt(cx + dx, cy + 1, cz + dz).setType(org.bukkit.Material.GLASS_PANE, true);
+                }
+            }
+            return CompletableFuture.completedFuture(w);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     /** Выгружает мир без сохранения и удаляет его папку. */
     public void destroy(World world) {
         if (world == null) return;

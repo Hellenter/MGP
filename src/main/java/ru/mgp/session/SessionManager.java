@@ -5,6 +5,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import ru.mgp.MGPPlugin;
+import ru.mgp.config.MapConfig;
 import ru.mgp.config.ModeConfig;
 import ru.mgp.util.Msg;
 
@@ -44,6 +45,11 @@ public final class SessionManager {
             Msg.send(p, "<red>Режим не найден: " + Msg.esc(modeId));
             return;
         }
+        String problem = problem(mode, p.hasPermission("mgp.admin"));
+        if (problem != null) {
+            Msg.send(p, problem);
+            return;
+        }
         GameSession current = of(p);
         if (current != null) current.removePlayer(p, false);
 
@@ -64,9 +70,33 @@ public final class SessionManager {
             best.create();
         }
         if (!best.addPlayer(p)) {
-            Msg.send(p, "<red>Не удалось присоединиться.");
+            Msg.send(p, best.state() == GameSession.State.CLOSED
+                    ? "<red>Не удалось подготовить арену" + (p.hasPermission("mgp.admin") ? " — причина в консоли сервера (logs/latest.log)." : ", попробуй позже.")
+                    : "<red>Не удалось присоединиться: арена уже заполнена или стартует. Попробуй ещё раз.");
             plugin.hub().send(p);
         }
+    }
+
+    /** Карта годится для игры: есть шаблон и есть куда ставить игроков (спавны или участки). */
+    public boolean playable(MapConfig m) {
+        return plugin.worlds().templateExists(m.template) && (!m.spawns.isEmpty() || !m.plots.isEmpty());
+    }
+
+    /** Почему в режим нельзя зайти, или null. Админу — с подробностями по каждой карте. */
+    private String problem(ModeConfig mode, boolean admin) {
+        List<MapConfig> maps = plugin.registry().mapsFor(mode.id);
+        for (MapConfig m : maps) if (playable(m)) return null;
+        if (!admin) return "<red>Режим " + mode.displayName + " <red>пока не готов: нет ни одной карты.";
+        if (maps.isEmpty()) {
+            return "<red>У режима " + mode.id + " нет карт. Добавь: /mgp import <карта> " + mode.id + " <x1 y1 z1 x2 y2 z2>";
+        }
+        StringBuilder sb = new StringBuilder("<red>У режима " + mode.id + " нет готовых карт:");
+        for (MapConfig m : maps) {
+            sb.append("\n<gray>• ").append(m.id).append(": ");
+            if (!plugin.worlds().templateExists(m.template)) sb.append("<red>нет шаблона templates/").append(Msg.esc(m.template));
+            else sb.append("<red>нет спавнов</red> <gray>— встань на точку и /mgp setup spawn ").append(m.id);
+        }
+        return sb.toString();
     }
 
     public void leave(Player p) {

@@ -79,7 +79,7 @@ public final class GameSession {
         double per = plugin.getConfig().getDouble("voting.weighted.per-vote", 1.0);
 
         List<MapConfig> maps = new ArrayList<>(plugin.registry().mapsFor(mode.id));
-        maps.removeIf(m -> !plugin.worlds().templateExists(m.template));
+        maps.removeIf(m -> !plugin.sessions().playable(m));
         Collections.shuffle(maps, random);
         if (mode.mapVoteOptions > 0 && maps.size() > mode.mapVoteOptions) maps = maps.subList(0, mode.mapVoteOptions);
         List<Vote.Option> mapOptions = new ArrayList<>();
@@ -100,20 +100,23 @@ public final class GameSession {
 
     /** Запускает подготовку мира ожидания. */
     public void create() {
-        if (!plugin.worlds().templateExists(mode.waitingTemplate)) {
-            plugin.getLogger().severe("Нет шаблона лобби ожидания '" + mode.waitingTemplate + "' для режима " + mode.id);
+        String wName = WorldService.PREFIX + mode.id + "_w" + id;
+        java.util.concurrent.CompletableFuture<World> wf;
+        if (plugin.worlds().templateExists(mode.waitingTemplate)) {
+            wf = plugin.worlds().create(mode.waitingTemplate, wName);
+        } else {
+            plugin.getLogger().warning("Нет шаблона лобби ожидания templates/" + mode.waitingTemplate + " для режима " + mode.id
+                    + " — использую временную площадку. Своё лобби: /mgp setup export " + mode.waitingTemplate + " (стоя в мире лобби)");
+            wf = plugin.worlds().createPlatform(wName, mode.waitingSpawn);
         }
-        if (votes.get("map").options.isEmpty()) {
-            plugin.getLogger().severe("У режима " + mode.id + " нет ни одной карты с готовым шаблоном");
-        }
-        plugin.worlds().create(mode.waitingTemplate, WorldService.PREFIX + mode.id + "_w" + id).whenComplete((w, ex) -> {
+        wf.whenComplete((w, ex) -> {
             if (state == State.CLOSED) {
                 if (w != null) plugin.worlds().destroy(w);
                 return;
             }
             if (ex != null) {
                 plugin.getLogger().log(Level.SEVERE, "Не удалось создать лобби ожидания для " + mode.id, ex);
-                broadcast("<red>Не удалось подготовить арену. Попробуй ещё раз.");
+                broadcast("<red>Не удалось подготовить арену: " + Msg.esc(String.valueOf(ex.getMessage())));
                 close();
                 return;
             }

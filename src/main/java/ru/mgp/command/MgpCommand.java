@@ -124,6 +124,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
+                    "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup info <карта>")) Msg.send(p, line);
             return;
         }
@@ -207,6 +208,7 @@ public final class MgpCommand implements TabExecutor {
                         addMap(y, "triggers", m);
                     }, "Триггер добавлен — впиши действия в файл карты и сделай /mgp reload");
                 }
+                case "lobby" -> setupLobby(p, a);
                 case "waiting" -> {
                     need(a, 2);
                     ModeConfig m = plugin.registry().mode(a[1]);
@@ -291,6 +293,36 @@ public final class MgpCommand implements TabExecutor {
         save(y, m.file);
         plugin.registry().loadMap(m.file);
         Msg.send(p, "<green>" + done);
+    }
+
+    /** /mgp setup lobby <режим>: область pos1/pos2 -> templates/<шаблон лобби>, waiting.spawn = позиция игрока. */
+    private void setupLobby(Player p, String[] a) {
+        need(a, 2);
+        ModeConfig mode = plugin.registry().mode(a[1]);
+        if (mode == null) { Msg.send(p, "<red>Нет режима " + Msg.esc(a[1])); return; }
+        Pos[] sel = selection(p);
+        if (sel == null) return;
+        String selWorld = posWorld.get(p.getUniqueId());
+        if (selWorld != null && !selWorld.equals(p.getWorld().getName())) { Msg.send(p, "<red>pos1/pos2 заданы в другом мире."); return; }
+        ru.mgp.util.Region box = ru.mgp.util.Region.of(sel[0], sel[1]);
+        Location loc = p.getLocation();
+        if (!box.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) {
+            Msg.send(p, "<red>Встань внутри выделенной области — твоя позиция станет точкой появления в лобби.");
+            return;
+        }
+        String template = mode.waitingTemplate != null && mode.waitingTemplate.matches("[a-z0-9_]{1,32}") ? mode.waitingTemplate : mode.id + "_waiting";
+        String spawn = Pos.of(loc).serialize();
+        Msg.send(p, "<gray>Вырезаю лобби ожидания в templates/" + template + "...");
+        plugin.importer().run(new ru.mgp.world.MapImporter.Request(p.getWorld(), template, mode.id, box, null, false, 0, true)).whenComplete((r, ex) -> {
+            if (ex != null) { Msg.send(p, "<red>Ошибка: " + Msg.esc(String.valueOf(ex.getMessage()))); return; }
+            ModeConfig m = plugin.registry().mode(mode.id);
+            m.yaml.set("waiting.template", template);
+            m.yaml.set("waiting.spawn", spawn);
+            m.yaml.set("waiting.void-y", box.minY() - 5);
+            save(m.yaml, m.file);
+            plugin.registry().reloadMode(m.id);
+            Msg.send(p, "<green>Лобби ожидания для " + m.id + " готово: " + r.chunks() + " чанков, спавн " + spawn + ". Новые игры уже будут в нём.");
+        });
     }
 
     private Pos[] selection(Player p) {
@@ -411,9 +443,9 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
-                        "trader", "pos1", "pos2", "plot", "trigger", "waiting", "info"));
+                        "trader", "pos1", "pos2", "plot", "trigger", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
-                if (a[1].equalsIgnoreCase("waiting")) plugin.registry().modes().forEach(m -> out.add(m.id));
+                if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))
                     plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("create")) {

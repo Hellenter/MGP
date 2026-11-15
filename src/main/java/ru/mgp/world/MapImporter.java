@@ -27,7 +27,12 @@ import java.util.regex.Pattern;
 public final class MapImporter {
     private static final Pattern ID = Pattern.compile("[a-z0-9_]{1,32}");
 
-    public record Request(World world, String mapId, String modeId, Region box, String displayName, boolean detectChests, int margin) {}
+    /** lobby=true: вырезать область как лобби ожидания режима (без maps/*.yml, без поиска сундуков). */
+    public record Request(World world, String mapId, String modeId, Region box, String displayName, boolean detectChests, int margin, boolean lobby) {
+        public Request(World world, String mapId, String modeId, Region box, String displayName, boolean detectChests, int margin) {
+            this(world, mapId, modeId, box, displayName, detectChests, margin, false);
+        }
+    }
 
     public record Result(String mapId, String template, int chunks, long bytes, int chests, boolean created, boolean modeExists) {
         public String summary() {
@@ -64,7 +69,7 @@ public final class MapImporter {
         int minCx = Math.floorDiv(box.minX(), 16) - r.margin(), maxCx = Math.floorDiv(box.maxX(), 16) + r.margin();
         int minCz = Math.floorDiv(box.minZ(), 16) - r.margin(), maxCz = Math.floorDiv(box.maxZ(), 16) + r.margin();
 
-        CompletableFuture<List<String>> chestsF = r.detectChests() ? findChests(w, box, minCx, minCz, maxCx, maxCz)
+        CompletableFuture<List<String>> chestsF = r.detectChests() && !r.lobby() ? findChests(w, box, minCx, minCz, maxCx, maxCz)
                 : CompletableFuture.completedFuture(null);
 
         chestsF.whenComplete((chests, ex) -> {
@@ -79,7 +84,7 @@ public final class MapImporter {
                     if (st.chunks() == 0) throw new IOException("В этой области нет сгенерированных чанков — проверь координаты и мир");
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         try {
-                            boolean created = writeMapConfig(r, chests);
+                            boolean created = r.lobby() || writeMapConfig(r, chests);
                             plugin.registry().load();
                             result.complete(new Result(r.mapId(), r.mapId(), st.chunks(), st.bytes(), chests == null ? 0 : chests.size(), created,
                                     plugin.registry().mode(r.modeId()) != null));
