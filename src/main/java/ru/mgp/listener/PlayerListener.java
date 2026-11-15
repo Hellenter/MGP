@@ -126,6 +126,13 @@ public final class PlayerListener implements Listener {
     public void onChat(AsyncChatEvent e) {
         Player sender = e.getPlayer();
         e.viewers().removeIf(a -> a instanceof Player v && !plugin.visibility().sameRoom(sender, v));
+        // наблюдатели (выбывшие) во время игры пишут только наблюдателям — иначе подсказывают живым (прятки!)
+        ru.mgp.session.GameSession s = plugin.sessions().of(sender);
+        if (s != null && s.isPlaying() && s.isSpectator(sender.getUniqueId())) {
+            e.viewers().removeIf(a -> a instanceof Player v && s.isAlive(v));
+            e.renderer((source, displayName, message, viewer) -> net.kyori.adventure.text.Component.text("[Наблюдатель] ", net.kyori.adventure.text.format.NamedTextColor.GRAY)
+                    .append(displayName).append(net.kyori.adventure.text.Component.text(": ", net.kyori.adventure.text.format.NamedTextColor.GRAY)).append(message));
+        }
     }
 
     // ------------------------------------------------------------- защита хаба

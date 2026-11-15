@@ -12,16 +12,28 @@ import java.util.*;
 /** Карта: maps/<id>.yml. Координаты задаются без мира — карта копируется в новый мир на каждую игру. */
 public final class MapConfig {
     public record ChestSpot(Pos pos, String tier) {}
-    public record TraderSpot(Pos pos, String set, String name, String profession) {}
+    /** Продавец: set — сделки жителя из trades режима, shop — магазин из shops/*.yml (одно из двух). */
+    public record TraderSpot(Pos pos, String set, String name, String profession, String shop) {}
     public record Trigger(String name, Region region, Mode mode, List<String> actions) {
         public enum Mode { ONCE, PER_PLAYER, REPEAT }
     }
     public record Plot(Region region, Pos spawn) {}
+    /**
+     * Скриптовый объект карты вместо командных блоков (см. session/MapScripts).
+     * type: hold — встать рядом с блоком и держать Shift hold сек.; button — ПКМ по блоку (кнопка, рычаг, люк...);
+     *       plate — наступить на блок (нажимная плита); zone — войти в радиус.
+     */
+    public record Script(String id, Type type, Pos block, double radius, double hold, String hint, String progress,
+                         String particle, int cooldown, Trigger.Mode mode, boolean cancelUse, List<String> actions) {
+        public enum Type { HOLD, BUTTON, PLATE, ZONE }
+    }
 
     public final String id;
     public final File file;
     public final YamlConfiguration yaml;
     public final String mode;
+    /** Дополнительные режимы, в которых тоже играется карта (also-modes). */
+    public final List<String> alsoModes = new ArrayList<>();
     public final String displayName;
     public final Material icon;
     public final String template;
@@ -39,12 +51,20 @@ public final class MapConfig {
     public final List<TraderSpot> traders = new ArrayList<>();
     public final List<Trigger> triggers = new ArrayList<>();
     public final List<Plot> plots = new ArrayList<>();
+    public final List<Script> scripts = new ArrayList<>();
+
+    public boolean playableIn(String modeId) {
+        if (mode.equalsIgnoreCase(modeId)) return true;
+        for (String am : alsoModes) if (am.equalsIgnoreCase(modeId)) return true;
+        return false;
+    }
 
     public MapConfig(String id, File file, YamlConfiguration y) {
         this.id = id;
         this.file = file;
         this.yaml = y;
         this.mode = y.getString("mode", "");
+        for (String am : y.getStringList("also-modes")) if (!am.isBlank()) alsoModes.add(am.trim().toLowerCase(java.util.Locale.ROOT));
         this.displayName = y.getString("display-name", id);
         this.icon = Cfg.material(y.getString("icon"), Material.FILLED_MAP);
         this.template = y.getString("template", id);
@@ -66,13 +86,29 @@ public final class MapConfig {
         for (Map<?, ?> raw : y.getMapList("traders")) {
             Map<String, Object> m = Cfg.asMap(raw);
             traders.add(new TraderSpot(Pos.parse(Cfg.str(m, "pos", null)), Cfg.str(m, "set", "default"),
-                    Cfg.str(m, "name", "<yellow>Торговец"), Cfg.str(m, "profession", "librarian")));
+                    Cfg.str(m, "name", "<yellow>Торговец"), Cfg.str(m, "profession", "librarian"), Cfg.str(m, "shop", null)));
         }
         for (Map<?, ?> raw : y.getMapList("triggers")) {
             Map<String, Object> m = Cfg.asMap(raw);
             Region r = Region.of(Pos.parse(Cfg.str(m, "min", null)), Pos.parse(Cfg.str(m, "max", null)));
             triggers.add(new Trigger(Cfg.str(m, "name", "trigger" + triggers.size()), r,
                     Cfg.enumValue(Trigger.Mode.class, Cfg.str(m, "mode", "ONCE"), Trigger.Mode.ONCE),
+                    Cfg.strings(m.get("actions"))));
+        }
+        for (Map<?, ?> raw : y.getMapList("scripts")) {
+            Map<String, Object> m = Cfg.asMap(raw);
+            Pos b = Pos.parse(Cfg.str(m, "block", null));
+            if (b == null) continue;
+            Script.Type t = Cfg.enumValue(Script.Type.class, Cfg.str(m, "type", "BUTTON"), Script.Type.BUTTON);
+            scripts.add(new Script(Cfg.str(m, "id", "script" + scripts.size()), t, b,
+                    Cfg.dbl(m, "radius", t == Script.Type.ZONE ? 2.0 : 1.8),
+                    Cfg.dbl(m, "hold", 3.0),
+                    Cfg.str(m, "hint", t == Script.Type.HOLD ? "<yellow>Зажми <gold><bold>SHIFT</bold></gold>, чтобы активировать" : null),
+                    Cfg.str(m, "progress", "<aqua>Активация"),
+                    Cfg.str(m, "particle", t == Script.Type.HOLD ? "PORTAL" : null),
+                    Cfg.integer(m, "cooldown", t == Script.Type.HOLD ? 1 : 2),
+                    Cfg.enumValue(Trigger.Mode.class, Cfg.str(m, "mode", "REPEAT").replace('-', '_'), Trigger.Mode.REPEAT),
+                    Cfg.bool(m, "cancel-use", false),
                     Cfg.strings(m.get("actions"))));
         }
         for (Map<?, ?> raw : y.getMapList("plots")) {

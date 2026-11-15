@@ -37,13 +37,35 @@ import java.util.*;
  *   refill-chests [tier]
  *   command: <консольная команда, {player} — имя игрока>
  *   mode: <действие режима>      — например mode: deathmatch
+ *   teleport: x y z [yaw pitch]  — телепорт в мире игры (без yaw/pitch — взгляд не меняется)
+ *   particle: <тип> [кол-во] [x y z] — частицы у игрока или в точке
+ *   setblock: x y z <блок>       — поставить блок в мире игры (AIR — убрать)
+ *   wait: <сек>                  — пауза: следующие действия выполнятся позже
  */
 public final class ActionRunner {
     private ActionRunner() {}
 
     public static void run(GameSession s, List<String> actions, Player target) {
         if (actions == null) return;
-        for (String raw : actions) {
+        for (int n = 0; n < actions.size(); n++) {
+            String raw = actions.get(n);
+            // wait: <сек> — остальные действия выполнятся позже (если игра ещё идёт и игрок в ней)
+            if (raw.trim().toLowerCase(Locale.ROOT).startsWith("wait")) {
+                double sec;
+                try {
+                    sec = Double.parseDouble(raw.substring(raw.indexOf(':') + 1).trim().replace(',', '.'));
+                } catch (Exception e) {
+                    s.plugin().getLogger().warning("Ошибка в действии '" + raw + "': ожидалось wait: <секунды>");
+                    continue;
+                }
+                List<String> rest = List.copyOf(actions.subList(n + 1, actions.size()));
+                Bukkit.getScheduler().runTaskLater(s.plugin(), () -> {
+                    if (!s.isPlaying()) return;
+                    if (target != null && (!target.isOnline() || !s.isAlive(target))) return;
+                    run(s, rest, target);
+                }, Math.max(1L, Math.round(sec * 20)));
+                return;
+            }
             try {
                 runOne(s, raw, target);
             } catch (Exception e) {
@@ -122,6 +144,38 @@ public final class ActionRunner {
                 } else {
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), arg);
                 }
+            }
+            case "teleport", "tp" -> {
+                if (world == null) return;
+                String[] t = arg.split("[\\s,]+");
+                ru.mgp.util.Pos pos = ru.mgp.util.Pos.parse(arg);
+                for (Player pl : aliveTargets) {
+                    org.bukkit.Location to = pos.toLocation(world);
+                    if (t.length < 5) { to.setYaw(pl.getLocation().getYaw()); to.setPitch(pl.getLocation().getPitch()); }
+                    MapScripts.particle(world, "REVERSE_PORTAL", pl.getLocation().add(0, 1, 0), 30, 0.4);
+                    pl.teleport(to);
+                    pl.setFallDistance(0);
+                    MapScripts.particle(world, "PORTAL", to.clone().add(0, 1, 0), 40, 0.4);
+                    world.playSound(to, org.bukkit.Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
+                }
+            }
+            case "particle", "particles" -> {
+                if (world == null) return;
+                String[] t = arg.split("\\s+");
+                int count = t.length > 1 ? Integer.parseInt(t[1]) : 20;
+                if (t.length >= 5) {
+                    MapScripts.particle(world, t[0], new org.bukkit.Location(world, Double.parseDouble(t[2]), Double.parseDouble(t[3]), Double.parseDouble(t[4])), count, 0.4);
+                } else {
+                    for (Player pl : aliveTargets) MapScripts.particle(world, t[0], pl.getLocation().add(0, 1, 0), count, 0.4);
+                }
+            }
+            case "setblock" -> {
+                if (world == null) return;
+                String[] t = arg.split("\\s+");
+                org.bukkit.Material m = org.bukkit.Material.matchMaterial(t[3]);
+                if (m == null || !m.isBlock()) throw new IllegalArgumentException("неизвестный блок " + t[3]);
+                world.getBlockAt((int) Math.floor(Double.parseDouble(t[0])), (int) Math.floor(Double.parseDouble(t[1])),
+                        (int) Math.floor(Double.parseDouble(t[2]))).setType(m);
             }
             case "mode" -> {
                 if (!s.logic().handleAction(arg, target))

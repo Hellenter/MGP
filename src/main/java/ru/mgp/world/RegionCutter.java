@@ -83,10 +83,16 @@ public final class RegionCutter {
                 int loc = hb.getInt(i * 4);
                 if (loc == 0 || cx < minCx || cx > maxCx || cz < minCz || cz > maxCz) continue;
                 int offset = loc >>> 8, count = loc & 0xFF;
-                if (offset < 2 || count == 0 || (long) (offset + count) * SECTOR > src.length()) continue;
+                long start = (long) offset * SECTOR;
+                if (offset < 2 || count == 0 || start + 5 > src.length()) continue;
+                // Последний чанк файла часто не добит до полного сектора (особенно в entities/*.mca):
+                // читаем сколько есть, проверяем длину из заголовка чанка и добиваем нулями.
+                int avail = (int) Math.min((long) count * SECTOR, src.length() - start);
                 byte[] data = new byte[count * SECTOR];
-                src.seek((long) offset * SECTOR);
-                src.readFully(data);
+                src.seek(start);
+                src.readFully(data, 0, avail);
+                int len = ByteBuffer.wrap(data, 0, 4).getInt();
+                if (len <= 0 || len + 4 > avail) continue;
                 blobs.add(data);
                 nh.putInt(i * 4, (nextSector << 8) | count);
                 nh.putInt(SECTOR + i * 4, hb.getInt(SECTOR + i * 4)); // timestamp

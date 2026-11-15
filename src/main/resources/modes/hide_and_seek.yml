@@ -1,0 +1,96 @@
+# ===================== ПРЯТКИ (классика) =====================
+# Прячущиеся прячутся сами, ищущие ищут. Пойманный становится ищущим.
+# Ищущие поймали всех — победа ищущих; дожили до конца времени — победа прячущихся.
+type: hide_and_seek
+display-name: "<green><bold>Прятки"
+icon: SPYGLASS
+description:
+  - "<gray>Спрячься получше и продержись"
+  - "<gray>до конца — или найди всех!"
+
+min-players: 3
+max-players: 12
+max-sessions: 4
+countdown: 45
+fast-countdown: 10
+end-delay: 10
+time-limit: "5:00"
+
+# waiting: не задан — используется общее лобби ожидания (default-lobby в config.yml)
+
+map-vote:
+  type: MOST_VOTES
+  options: 3
+
+natural-mobs: false
+gamerules:
+  show_advancement_messages: false
+  show_death_messages: false
+  immediate_respawn: true
+
+default-kit: ""
+kits: {}
+start-items: []
+
+win-actions:
+  - "message: <gold>Победа в прятках!"
+
+# Плейсхолдеры режима: {role} {hiders} {seekers} {points} {hide_left} {disguise}
+sidebar:
+  title: "<green><bold>ПРЯТКИ"
+  waiting:
+    - "<dark_gray>────────────"
+    - "<gray>Карта: {map}"
+    - "<gray>Игроки: <green>{players}/{max}"
+    - "<gray>Статус: <yellow>{state}"
+    - "<dark_gray>────────────"
+  playing:
+    - "<dark_gray>────────────"
+    - "<gray>Ты: {role}"
+    - "<gray>Ищущие выходят: <yellow>{hide_left}"
+    - "<gray>До конца: <yellow>{time}"
+    - ""
+    - "<gray>Прячущихся: <green>{hiders}"
+    - "<gray>Ищущих: <red>{seekers}"
+    - "<gray>Очки за таунты: <light_purple>{points}"
+    - ""
+    - "<gray>Карта: {map}"
+    - "<dark_gray>────────────"
+  ending:
+    - "<dark_gray>────────────"
+    - "<gold>Игра окончена!"
+    - "<gray>Очки за таунты: <light_purple>{points}"
+    - "<dark_gray>────────────"
+
+settings:
+  variant: classic                 # classic | prophunt
+  hide-time: 45                    # сек., пока ищущие ослеплены и стоят
+  seekers: 1                       # сколько ищущих минимум
+  seeker-ratio: 0.2                # или доля от игроков (берётся большее)
+  caught: seeker                   # seeker — пойманный ищет вместе со всеми | spectator — выбывает
+  one-hit: true                    # один удар ловит прячущегося
+  seeker-weapon: STICK
+  auto-taunt: 60                   # раз в N сек. все прячущиеся сами издают случайный звук (0 — выкл.)
+  hide-nametags: true              # ники над головами не видно никому (ни через стены, ни вблизи)
+  disable-hunger: true
+  # (необязательно) seeker-spawn в файле карты — комната, где ищущие ждут hide-time
+
+  # Таунты прячущихся: звук/частицы из места, где ты прячешься. Дают очки (рискуешь — получаешь).
+  # sound — id звука ванилы, particle — имя частиц (NOTE, HEART, ANGRY_VILLAGER...), type: sound | firework
+  taunts:
+    - { id: meow,    display: "<yellow>Мяу",            icon: STRING,       sound: "minecraft:entity.cat.ambient",            particle: HEART,          cooldown: 10, points: 1 }
+    - { id: villager, display: "<yellow>Хмм...",        icon: EMERALD,      sound: "minecraft:entity.villager.no",            particle: ANGRY_VILLAGER, cooldown: 15, points: 2 }
+    - { id: burp,    display: "<yellow>Отрыжка",        icon: COOKED_BEEF,  sound: "minecraft:entity.player.burp",            particle: CLOUD,          cooldown: 15, points: 2 }
+    - { id: goat,    display: "<gold>Крик козы",        icon: GOAT_HORN,    sound: "minecraft:entity.goat.screaming.ambient", particle: NOTE,           cooldown: 25, points: 4, volume: 3 }
+    - { id: firework, display: "<red><bold>Салют",      icon: FIREWORK_ROCKET, sound: "minecraft:entity.firework_rocket.launch", type: firework,    cooldown: 45, points: 8,
+        lore: ["<gray>Видно на всю карту"] }
+
+  # Провокации ищущих: заставляют ВСЕХ прячущихся выдать себя.
+  # type: sound (звук из места прячущегося) | glow (подсветка сквозь стены на duration сек.)
+  #       | particles (частицы над прячущимся duration сек.) | firework (салют над прячущимся)
+  provocations:
+    - { id: shout,  display: "<yellow>Эй, ты где?",       icon: BELL,             sound: "minecraft:entity.chicken.ambient", volume: 2.5, particle: NOTE, type: sound, cooldown: 30 }
+    - { id: smoke,  display: "<gray>Дымовой след",        icon: CAMPFIRE,         particle: CAMPFIRE_COSY_SMOKE, type: particles, duration: 5, cooldown: 60 }
+    - { id: rocket, display: "<red>Салют над головой",    icon: FIREWORK_ROCKET,  sound: "minecraft:entity.firework_rocket.launch", type: firework, cooldown: 90 }
+    - { id: glow,   display: "<aqua><bold>Подсветка",     icon: GLOWSTONE_DUST,   type: glow, duration: 3, cooldown: 120,
+        lore: ["<gray>Прячущиеся светятся сквозь стены 3 сек."] }

@@ -41,6 +41,11 @@ public final class SidebarService {
         List<net.kyori.adventure.text.Component> out = new ArrayList<>();
         for (String line : lines) out.add(Msg.parse(line, ph));
         sb.update(Msg.parse(title, ph), out);
+        // прятки и т.п.: ники не видно ни через стены, ни вблизи — никакой лишней подсказки
+        Set<String> hidden = new HashSet<>();
+        if (s != null && s.isPlaying() && s.mode.settings.getBoolean("hide-nametags", false))
+            for (Player o : s.online()) hidden.add(o.getName());
+        sb.hideNametags(hidden);
     }
 
     public void remove(Player p) { boards.remove(p.getUniqueId()); }

@@ -30,8 +30,8 @@ public final class MapRenamer {
         File newFile = plugin.registry().mapFile(newId);
         if (plugin.registry().map(newId) != null || newFile.exists()) throw new IllegalArgumentException("Карта " + newId + " уже есть");
         for (GameSession s : plugin.sessions().sessions()) {
-            if (s.mode.id.equals(m.mode))
-                throw new IllegalStateException("Сейчас идёт игра режима " + m.mode + " — переименуй карту, когда игр этого режима не будет");
+            if (m.playableIn(s.mode.id))
+                throw new IllegalStateException("Сейчас идёт игра режима " + s.mode.id + " — переименуй карту, когда игр этого режима не будет");
         }
 
         YamlConfiguration y = YamlConfiguration.loadConfiguration(m.file);

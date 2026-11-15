@@ -55,6 +55,7 @@ public final class GameSession {
     private final Map<String, Vote> votes = new LinkedHashMap<>();
     private final Map<String, String> chosenModifiers = new LinkedHashMap<>();
     private final Set<String> firedTriggers = new HashSet<>();
+    private final MapScripts scripts = new MapScripts(this);
     private final Map<String, Set<UUID>> firedPerPlayer = new HashMap<>();
 
     private World waitingWorld;
@@ -187,6 +188,7 @@ public final class GameSession {
         plugin.sessions().unbind(p);
         for (Vote v : votes.values()) v.remove(u);
         boolean wasAlive = alive.remove(u);
+        scripts.clear(p);
         if (toHub) plugin.hub().send(p);
         else plugin.visibility().refresh(p);
 
@@ -588,6 +590,29 @@ public final class GameSession {
     private void spawnTraders() {
         var professions = RegistryAccess.registryAccess().getRegistry(RegistryKey.VILLAGER_PROFESSION);
         for (MapConfig.TraderSpot t : map.traders) {
+            if (t.pos() == null) continue;
+            if (t.shop() != null) {
+                if (plugin.shops().get(t.shop()) == null) {
+                    plugin.getLogger().warning("Нет магазина '" + t.shop() + "' (plugins/MGP/shops) для карты " + map.id);
+                    continue;
+                }
+                Villager v = gameWorld.spawn(t.pos().toLocation(gameWorld), Villager.class, x -> {
+                    x.setAI(false);
+                    x.setInvulnerable(true);
+                    x.setSilent(true);
+                    x.setPersistent(true);
+                    x.setCollidable(false);
+                    if (!"none".equalsIgnoreCase(t.profession())) {
+                        Villager.Profession prof = professions.get(NamespacedKey.minecraft(t.profession().toLowerCase(Locale.ROOT)));
+                        if (prof != null) x.setProfession(prof);
+                    }
+                    x.setVillagerLevel(5);
+                    x.customName(Msg.parse(t.name()));
+                    x.setCustomNameVisible(true);
+                });
+                plugin.shops().tag(v, t.shop());
+                continue;
+            }
             List<TradeSpec> specs = mode.trades.get(t.set());
             if (specs == null) {
                 plugin.getLogger().warning("Нет набора сделок '" + t.set() + "' в режиме " + mode.id);
@@ -618,6 +643,7 @@ public final class GameSession {
     /** Игрок выбыл: становится наблюдателем (летает, невидим для живых). */
     public void eliminate(Player p) {
         alive.remove(p.getUniqueId());
+        scripts.clear(p);
         makeSpectator(p);
     }
 
@@ -655,6 +681,7 @@ public final class GameSession {
                     names.isEmpty() ? "" : "<yellow>" + String.join(", ", names));
             if (win) ActionRunner.run(this, mode.winActions, p);
         }
+        scripts.clearAll();
         logic.onEnd();
     }
 
@@ -745,6 +772,7 @@ public final class GameSession {
 
     public State state() { return state; }
     public GameLogic logic() { return logic; }
+    public MapScripts scripts() { return scripts; }
     public MapConfig map() { return map; }
     public World gameWorld() { return gameWorld; }
     public World waitingWorld() { return waitingWorld; }

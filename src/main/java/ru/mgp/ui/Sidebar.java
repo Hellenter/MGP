@@ -27,6 +27,22 @@ public final class Sidebar {
 
     public Scoreboard board() { return board; }
 
+    /** Скрыть ники над головами у перечисленных игроков (пустой список — показать всех). */
+    public void hideNametags(java.util.Collection<String> names) {
+        org.bukkit.scoreboard.Team t = board.getTeam("mgp_nt");
+        if (names.isEmpty()) {
+            if (t != null) t.unregister();
+            return;
+        }
+        if (t == null) {
+            t = board.registerNewTeam("mgp_nt");
+            t.setOption(org.bukkit.scoreboard.Team.Option.NAME_TAG_VISIBILITY, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
+            t.setOption(org.bukkit.scoreboard.Team.Option.COLLISION_RULE, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
+        }
+        for (String e : new java.util.ArrayList<>(t.getEntries())) if (!names.contains(e)) t.removeEntry(e);
+        for (String n : names) if (!t.hasEntry(n)) t.addEntry(n);
+    }
+
     public void update(Component title, List<Component> lines) {
         objective.displayName(title);
         int n = Math.min(lines.size(), MAX_LINES);

@@ -25,6 +25,17 @@ public final class SessionManager {
 
     public void start() {
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
+        // скриптовые объекты карт (удержание Shift и т.п.) — чаще, чем раз в секунду
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (GameSession s : List.copyOf(sessions)) {
+                if (!s.isPlaying()) continue;
+                try {
+                    s.scripts().tick();
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.SEVERE, "Ошибка в скриптах карты, сессия #" + s.id, e);
+                }
+            }
+        }, MapScripts.STEP, MapScripts.STEP);
     }
 
     private void tick() {

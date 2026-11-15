@@ -178,6 +178,7 @@ public final class GameListener implements Listener {
             if (s.isPlaying() || s.state() == GameSession.State.ENDING) e.setCancelled(true); // наблюдатели
             return;
         }
+        s.scripts().onInteract(e);
         s.logic().onInteract(e);
     }
 
@@ -185,6 +186,14 @@ public final class GameListener implements Listener {
     public void onInteractEntity(PlayerInteractEntityEvent e) {
         GameSession s = of(e.getPlayer());
         if (s != null && !active(s, e.getPlayer())) e.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {
+        GameSession s = of(e.getPlayer());
+        if (s == null) return;
+        if (!active(s, e.getPlayer())) { e.setCancelled(true); return; }
+        s.logic().onAttackEntity(e);
     }
 
     private static Player damager(EntityDamageEvent e) {
