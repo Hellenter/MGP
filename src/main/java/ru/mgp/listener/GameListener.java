@@ -76,6 +76,13 @@ public final class GameListener implements Listener {
         });
     }
 
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onOpen(org.bukkit.event.inventory.InventoryOpenEvent e) {
+        if (!(e.getPlayer() instanceof Player p)) return;
+        GameSession s = of(p);
+        if (s != null && s.isPlaying() && s.isAlive(p)) s.onContainerOpen(e.getInventory());
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent e) {
         GameSession s = of(e.getPlayer());

@@ -45,6 +45,8 @@ public final class GameSession {
     private final Random random = new Random();
 
     private final List<MapConfig.ChestSpot> autoChests = new ArrayList<>();
+    /** Уже заполненные контейнеры "x y z" -> тир. Остальные заполняются при первом открытии. */
+    private final Map<String, String> filledChests = new HashMap<>();
     private State state = State.CREATING;
     private final Set<UUID> players = new LinkedHashSet<>();
     private final Set<UUID> alive = new LinkedHashSet<>();
@@ -324,10 +326,8 @@ public final class GameSession {
         // по высоте берём весь мир: сундук может оказаться чуть ниже/выше выделения
         box = new Region(box.minX(), gameWorld.getMinHeight(), box.minZ(), box.maxX(), gameWorld.getMaxHeight() - 1, box.maxZ());
         final Region area = box;
-        Map<String, String> tiers = new HashMap<>();
-        var cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
-        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
-        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
+        Map<String, String> tiers = chestTiers();
+        Map<String, Integer> seen = new TreeMap<>();
 
         World w = gameWorld;
         MapConfig m = map;
@@ -337,6 +337,7 @@ public final class GameSession {
             for (int cz = Math.floorDiv(area.minZ(), 16); cz <= Math.floorDiv(area.maxZ(), 16); cz++) {
                 all.add(w.getChunkAtAsync(cx, cz, true).thenAccept((Chunk c) -> {
                     for (BlockState st : c.getTileEntities()) {
+                        synchronized (seen) { seen.merge(st.getType().name(), 1, Integer::sum); }
                         if (!(st instanceof Container)) continue;
                         String tier = tiers.get(st.getType().name());
                         if (tier == null || !mode.loot.containsKey(tier) || !area.contains(st.getX(), st.getY(), st.getZ())) continue;
@@ -349,10 +350,52 @@ public final class GameSession {
             if (gameWorld != w || state == State.CLOSED) return;
             if (ex != null) plugin.getLogger().log(Level.WARNING, "Поиск сундуков на карте " + m.id, ex);
             autoChests.addAll(found);
-            plugin.getLogger().info("Карта " + m.id + ": найдено сундуков автоматически: " + found.size());
+            plugin.getLogger().info("Карта " + m.id + ": найдено сундуков автоматически: " + found.size()
+                    + " (блоки с данными в области: " + seen + "). Остальные заполнятся при открытии.");
             fillChests(null);
             if (!found.isEmpty()) saveChests(m, found);
         }));
+    }
+
+    /**
+     * Игрок открывает контейнер на карте. Если он ещё не заполнялся (не найден заранее), заполняем сейчас:
+     * тир — из списка chests карты, а если список пуст — по типу блока (import.chest-tiers).
+     */
+    public void onContainerOpen(Inventory inv) {
+        if (gameWorld == null || map == null || state != State.PLAYING) return;
+        if (inv instanceof org.bukkit.inventory.DoubleChestInventory dc) {
+            fillOnOpen(dc.getLeftSide());
+            fillOnOpen(dc.getRightSide());
+        } else {
+            fillOnOpen(inv);
+        }
+    }
+
+    private void fillOnOpen(Inventory inv) {
+        Location l = inv.getLocation();
+        if (l == null || !gameWorld.equals(l.getWorld())) return;
+        String key = l.getBlockX() + " " + l.getBlockY() + " " + l.getBlockZ();
+        if (filledChests.containsKey(key)) return;
+        String tier = null;
+        for (MapConfig.ChestSpot c : map.chests) {
+            if ((c.pos().bx() + " " + c.pos().by() + " " + c.pos().bz()).equals(key)) { tier = c.tier(); break; }
+        }
+        if (tier == null && map.chests.isEmpty() && mode.settings.getBoolean("auto-chests", true)) {
+            tier = chestTiers().get(l.getBlock().getType().name());
+        }
+        if (tier == null) return;
+        LootTable table = mode.loot.get(tier);
+        if (table == null) return;
+        filledChests.put(key, tier);
+        table.fill(inv, random);
+    }
+
+    private Map<String, String> chestTiers() {
+        Map<String, String> tiers = new HashMap<>();
+        var cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
+        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
+        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
+        return tiers;
     }
 
     private Region mapBox() {
@@ -487,8 +530,11 @@ public final class GameSession {
         if (map == null || gameWorld == null) return;
         List<MapConfig.ChestSpot> spots = new ArrayList<>(map.chests);
         spots.addAll(autoChests);
+        // контейнеры, заполненные при открытии: после refill снова заполнятся при следующем открытии
+        filledChests.values().removeIf(t -> onlyTier == null || onlyTier.equalsIgnoreCase(t));
         for (MapConfig.ChestSpot c : spots) {
             if (onlyTier != null && !onlyTier.equalsIgnoreCase(c.tier())) continue;
+            filledChests.put(c.pos().bx() + " " + c.pos().by() + " " + c.pos().bz(), c.tier());
             LootTable table = mode.loot.get(c.tier());
             if (table == null) {
                 plugin.getLogger().warning("Нет таблицы лута '" + c.tier() + "' в режиме " + mode.id);
