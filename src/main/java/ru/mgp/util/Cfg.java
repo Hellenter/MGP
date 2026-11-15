@@ -15,6 +15,33 @@ public final class Cfg {
         return m == null ? def : m;
     }
 
+    /**
+     * Список блоков: имя (OAK_LEAVES), шаблон со звёздочкой (*_LEAVES) или тег ванилы (#leaves, #flowers, #replaceable).
+     * Неизвестные элементы возвращаются в unknown.
+     */
+    public static java.util.Set<Material> materials(java.util.List<String> specs, java.util.List<String> unknown) {
+        java.util.Set<Material> out = java.util.EnumSet.noneOf(Material.class);
+        for (String raw : specs) {
+            if (raw == null || raw.isBlank()) continue;
+            String s = raw.trim();
+            if (s.startsWith("#")) {
+                org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(s.substring(1).toLowerCase(java.util.Locale.ROOT));
+                org.bukkit.Tag<Material> tag = key == null ? null : org.bukkit.Bukkit.getTag(org.bukkit.Tag.REGISTRY_BLOCKS, key, Material.class);
+                if (tag == null) unknown.add(s); else out.addAll(tag.getValues());
+            } else if (s.contains("*")) {
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                        s.toUpperCase(java.util.Locale.ROOT).replace("*", ".*"));
+                int before = out.size();
+                for (Material m : Material.values()) if (!m.name().startsWith("LEGACY_") && m.isBlock() && p.matcher(m.name()).matches()) out.add(m);
+                if (out.size() == before) unknown.add(s);
+            } else {
+                Material m = material(s, null);
+                if (m == null) unknown.add(s); else out.add(m);
+            }
+        }
+        return out;
+    }
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> asMap(Object o) {
         if (o instanceof ConfigurationSection s) return s.getValues(false);

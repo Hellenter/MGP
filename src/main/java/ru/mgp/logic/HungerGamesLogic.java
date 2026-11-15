@@ -43,10 +43,9 @@ public final class HungerGamesLogic extends GameLogic {
         grace = st.getInt("grace-period", 30);
         allowPlace = st.getBoolean("allow-place", true);
         timeUp = st.getString("time-up", "draw");
-        for (String m : st.getStringList("breakable-blocks")) {
-            Material mat = Cfg.material(m, null);
-            if (mat != null) breakable.add(mat);
-        }
+        List<String> unknown = new ArrayList<>();
+        breakable.addAll(Cfg.materials(st.getStringList("breakable-blocks"), unknown));
+        if (!unknown.isEmpty()) s.plugin().getLogger().warning("breakable-blocks в " + s.mode.id + ": не распознано " + unknown);
     }
 
     @Override

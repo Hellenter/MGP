@@ -236,5 +236,32 @@ settings:
   freeze: 10                       # сек. стоим на спавнах перед стартом
   grace-period: 30                 # сек. без PvP после старта
   allow-place: true
-  breakable-blocks: [OAK_LEAVES, BIRCH_LEAVES, SPRUCE_LEAVES, SHORT_GRASS, TALL_GRASS, COBWEB, FERN]
+  # Что игрокам можно ломать. Имя блока (COBWEB), шаблон (*_VINES) или тег ванилы (#leaves).
+  # #sword_efficient — листва, лианы, цветы, ростки; #replaceable — трава, папоротник, сухой куст, снег.
+  breakable-blocks:
+    - "#leaves"
+    - "#flowers"
+    - "#saplings"
+    - "#replaceable"
+    - "#sword_efficient"
+    - "#cave_vines"
+    - "*_VINES"
+    - "*_VINES_PLANT"
+    - COBWEB
+    - GLOW_LICHEN
+    - MOSS_CARPET
+    - HANGING_ROOTS
+    - SUGAR_CANE
+    - BAMBOO
+    - KELP
+    - KELP_PLANT
+    - LILY_PAD
+    - BROWN_MUSHROOM
+    - RED_MUSHROOM
+    - SWEET_BERRY_BUSH
+    - SPORE_BLOSSOM
+    - SMALL_DRIPLEAF
+    - BIG_DRIPLEAF
+    - BIG_DRIPLEAF_STEM
+  auto-chests: true                # если у карты нет списка chests — найти сундуки на карте при старте игры
   time-up: draw                    # draw | most-kills — что делать, когда вышло время

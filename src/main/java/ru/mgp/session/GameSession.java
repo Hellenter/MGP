@@ -44,6 +44,7 @@ public final class GameSession {
     private final GameLogic logic;
     private final Random random = new Random();
 
+    private final List<MapConfig.ChestSpot> autoChests = new ArrayList<>();
     private State state = State.CREATING;
     private final Set<UUID> players = new LinkedHashSet<>();
     private final Set<UUID> alive = new LinkedHashSet<>();
@@ -304,8 +305,80 @@ public final class GameSession {
             b.setCenter(map.center.x(), map.center.z());
             if (map.borderSize > 0) b.setSize(map.borderSize);
         }
-        fillChests(null);
+        autoChests.clear();
+        if (map.chests.isEmpty() && !mode.loot.isEmpty() && mode.settings.getBoolean("auto-chests", true)) detectChests();
+        else fillChests(null);
         spawnTraders();
+    }
+
+    /**
+     * У карты не записаны сундуки: находим контейнеры в области карты сами (CHEST -> tier1, TRAPPED_CHEST -> tier2,
+     * см. import.chest-tiers в config.yml), заполняем и сохраняем список в maps/<карта>.yml, чтобы его можно было править.
+     */
+    private void detectChests() {
+        Region box = mapBox();
+        if (box == null) {
+            plugin.getLogger().warning("Карта " + map.id + ": сундуки не заданы и нет области source/center, чтобы найти их автоматически");
+            return;
+        }
+        // по высоте берём весь мир: сундук может оказаться чуть ниже/выше выделения
+        box = new Region(box.minX(), gameWorld.getMinHeight(), box.minZ(), box.maxX(), gameWorld.getMaxHeight() - 1, box.maxZ());
+        final Region area = box;
+        Map<String, String> tiers = new HashMap<>();
+        var cs = plugin.getConfig().getConfigurationSection("import.chest-tiers");
+        if (cs != null) for (String k : cs.getKeys(false)) tiers.put(k.toUpperCase(Locale.ROOT), cs.getString(k));
+        else { tiers.put("CHEST", "tier1"); tiers.put("TRAPPED_CHEST", "tier2"); }
+
+        World w = gameWorld;
+        MapConfig m = map;
+        List<MapConfig.ChestSpot> found = new ArrayList<>();
+        List<CompletableFuture<?>> all = new ArrayList<>();
+        for (int cx = Math.floorDiv(area.minX(), 16); cx <= Math.floorDiv(area.maxX(), 16); cx++) {
+            for (int cz = Math.floorDiv(area.minZ(), 16); cz <= Math.floorDiv(area.maxZ(), 16); cz++) {
+                all.add(w.getChunkAtAsync(cx, cz, true).thenAccept((Chunk c) -> {
+                    for (BlockState st : c.getTileEntities()) {
+                        if (!(st instanceof Container)) continue;
+                        String tier = tiers.get(st.getType().name());
+                        if (tier == null || !mode.loot.containsKey(tier) || !area.contains(st.getX(), st.getY(), st.getZ())) continue;
+                        synchronized (found) { found.add(new MapConfig.ChestSpot(new Pos(st.getX(), st.getY(), st.getZ(), 0, 0), tier)); }
+                    }
+                }));
+            }
+        }
+        CompletableFuture.allOf(all.toArray(new CompletableFuture[0])).whenComplete((v, ex) -> Bukkit.getScheduler().runTask(plugin, () -> {
+            if (gameWorld != w || state == State.CLOSED) return;
+            if (ex != null) plugin.getLogger().log(Level.WARNING, "Поиск сундуков на карте " + m.id, ex);
+            autoChests.addAll(found);
+            plugin.getLogger().info("Карта " + m.id + ": найдено сундуков автоматически: " + found.size());
+            fillChests(null);
+            if (!found.isEmpty()) saveChests(m, found);
+        }));
+    }
+
+    private Region mapBox() {
+        Pos a = Pos.parse(map.yaml.getString("source.min")), b = Pos.parse(map.yaml.getString("source.max"));
+        if (a != null && b != null) return Region.of(a, b);
+        if (map.center != null && map.borderSize > 0) {
+            double r = map.borderSize / 2;
+            return Region.of(new Pos(map.center.x() - r, gameWorld.getMinHeight(), map.center.z() - r, 0, 0),
+                    new Pos(map.center.x() + r, gameWorld.getMaxHeight() - 1, map.center.z() + r, 0, 0));
+        }
+        return null;
+    }
+
+    private void saveChests(MapConfig m, List<MapConfig.ChestSpot> list) {
+        try {
+            var y = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(m.file);
+            if (!y.getStringList("chests").isEmpty()) return;
+            List<String> lines = new ArrayList<>();
+            for (MapConfig.ChestSpot c : list) lines.add(c.pos().bx() + " " + c.pos().by() + " " + c.pos().bz() + " " + c.tier());
+            Collections.sort(lines);
+            y.set("chests", lines);
+            y.save(m.file);
+            plugin.registry().loadMap(m.file);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Не удалось сохранить сундуки в " + m.file, e);
+        }
     }
 
     private void startGame() {
@@ -412,7 +485,9 @@ public final class GameSession {
 
     public void fillChests(String onlyTier) {
         if (map == null || gameWorld == null) return;
-        for (MapConfig.ChestSpot c : map.chests) {
+        List<MapConfig.ChestSpot> spots = new ArrayList<>(map.chests);
+        spots.addAll(autoChests);
+        for (MapConfig.ChestSpot c : spots) {
             if (onlyTier != null && !onlyTier.equalsIgnoreCase(c.tier())) continue;
             LootTable table = mode.loot.get(c.tier());
             if (table == null) {

@@ -116,7 +116,7 @@ public final class MapImporter {
                     for (BlockState st : c.getTileEntities()) {
                         if (!(st instanceof Container)) continue;
                         String tier = tiers.get(st.getType().name());
-                        if (tier == null || !box.contains(st.getX(), st.getY(), st.getZ())) continue;
+                        if (tier == null || st.getX() < box.minX() || st.getX() > box.maxX() || st.getZ() < box.minZ() || st.getZ() > box.maxZ()) continue;
                         found.add(st.getX() + " " + st.getY() + " " + st.getZ() + " " + tier);
                     }
                 }));
