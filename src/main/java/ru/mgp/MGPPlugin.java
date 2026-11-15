@@ -5,6 +5,8 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.mgp.command.MgpCommand;
+import ru.mgp.command.ServerCommand;
+import ru.mgp.network.LinkedServers;
 import ru.mgp.config.ConfigRegistry;
 import ru.mgp.listener.GameListener;
 import ru.mgp.listener.MenuListener;
@@ -30,6 +32,7 @@ public final class MGPPlugin extends JavaPlugin {
     private SidebarService sidebars;
     private PanelServer panel;
     private MapImporter importer;
+    private LinkedServers servers;
 
     @Override
     public void onEnable() {
@@ -46,6 +49,8 @@ public final class MGPPlugin extends JavaPlugin {
         importer = new MapImporter(this);
         registry = new ConfigRegistry(this);
         registry.load();
+        servers = new LinkedServers(this);
+        servers.load();
         hub = new HubService(this);
         visibility = new VisibilityService(this);
         sidebars = new SidebarService(this);
@@ -60,6 +65,11 @@ public final class MGPPlugin extends JavaPlugin {
         for (String name : new String[]{"mgp", "leave", "play"}) {
             PluginCommand c = getCommand(name);
             if (c != null) { c.setExecutor(cmd); c.setTabCompleter(cmd); }
+        }
+        ServerCommand serverCmd = new ServerCommand(this);
+        for (String name : new String[]{"server", "smp"}) {
+            PluginCommand c = getCommand(name);
+            if (c != null) { c.setExecutor(serverCmd); c.setTabCompleter(serverCmd); }
         }
 
         sessions.start();
@@ -79,6 +89,7 @@ public final class MGPPlugin extends JavaPlugin {
         reloadConfig();
         Msg.setPrefix(getConfig().getString("prefix", ""));
         registry.load();
+        servers.load();
     }
 
     public WorldService worlds() { return worlds; }
@@ -89,4 +100,5 @@ public final class MGPPlugin extends JavaPlugin {
     public SidebarService sidebars() { return sidebars; }
     public PanelServer panel() { return panel; }
     public MapImporter importer() { return importer; }
+    public LinkedServers servers() { return servers; }
 }

@@ -12,6 +12,11 @@ commands:
     aliases: [hub, l]
   play:
     description: Открыть меню игр
+  server:
+    description: Перейти на другой сервер сети
+    usage: /server [id]
+  smp:
+    description: Перейти на сервер выживания SMP (нужен мод EAM)
 permissions:
   mgp.admin:
     description: Настройка карт, принудительный старт, перезагрузка

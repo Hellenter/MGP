@@ -3,6 +3,8 @@ package ru.mgp.ui;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.PlayerInventory;
+import ru.mgp.MGPPlugin;
+import ru.mgp.network.LinkedServers;
 import ru.mgp.session.GameSession;
 import ru.mgp.vote.Vote;
 
@@ -15,6 +17,11 @@ public final class Hotbar {
     public static void giveHub(Player p) {
         PlayerInventory inv = p.getInventory();
         inv.setItem(0, tagged(Material.COMPASS, "<green><bold>Выбор игры</bold> <gray>(ПКМ)", SELECTOR));
+        for (LinkedServers.Server s : MGPPlugin.getPlugin(MGPPlugin.class).servers().all()) {
+            if (s.hotbarSlot() < 1 || s.hotbarSlot() > 8) continue;
+            inv.setItem(s.hotbarSlot(), ru.mgp.util.Items.tagged(s.icon(), s.name() + " <gray>(ПКМ)", LinkedServers.TAG_PREFIX + s.id(),
+                    s.description().toArray(String[]::new)));
+        }
         inv.setHeldItemSlot(0);
     }
 
