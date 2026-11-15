@@ -1,0 +1,25 @@
+# Пример карты. Удобнее заполнять командами /mgp setup ... стоя в мире карты.
+mode: hunger_games
+display-name: "<green>Лесная долина"
+icon: OAK_SAPLING
+template: hg_forest                # папка plugins/MGP/templates/hg_forest
+weight: 1.0                        # вес для случайного выбора
+description: ["<gray>Густой лес и река"]
+spawns:
+  - "10.5 64 0.5 90 0"
+  - "-9.5 64 0.5 -90 0"
+spectator: "0.5 90 0.5"
+center: "0 64 0"
+border-size: 300
+chests:                            # x y z тир
+  - "5 64 5 tier1"
+  - "0 63 0 tier3"
+traders:
+  - { pos: "3.5 64 -6.5", set: default, name: "<yellow>Торговец", profession: weaponsmith }
+triggers:
+  - name: center_alert
+    min: "-5 60 -5"
+    max: "5 70 5"
+    mode: ONCE                     # ONCE | PER_PLAYER | REPEAT
+    actions:
+      - "broadcast: <yellow>Кто-то добрался до центра карты!"

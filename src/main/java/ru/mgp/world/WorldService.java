@@ -1,0 +1,162 @@
+package ru.mgp.world;
+
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.GameRule;
+import org.bukkit.World;
+import org.bukkit.WorldCreator;
+import org.bukkit.entity.Player;
+import ru.mgp.MGPPlugin;
+import ru.mgp.util.FileUtil;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+
+/**
+ * Шаблоны миров лежат в plugins/MGP/templates/<имя>.
+ * На каждую сессию шаблон копируется в папку сервера (mgp_...), загружается без автосохранения,
+ * а после игры выгружается без сохранения и удаляется. Так карта всегда «чистая».
+ */
+public final class WorldService {
+    public static final String PREFIX = "mgp_";
+
+    private final MGPPlugin plugin;
+    private final Path templatesDir;
+    private volatile boolean shuttingDown;
+
+    public WorldService(MGPPlugin plugin) {
+        this.plugin = plugin;
+        this.templatesDir = new File(plugin.getDataFolder(), "templates").toPath();
+        try {
+            Files.createDirectories(templatesDir);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.SEVERE, "Не удалось создать папку templates", e);
+        }
+    }
+
+    public Path templatesDir() { return templatesDir; }
+
+    public boolean templateExists(String template) {
+        return template != null && Files.isDirectory(templatesDir.resolve(template));
+    }
+
+    /** Асинхронно копирует шаблон и загружает мир в основном потоке. Future завершается в основном потоке. */
+    public CompletableFuture<World> create(String template, String worldName) {
+        CompletableFuture<World> result = new CompletableFuture<>();
+        Path src = templatesDir.resolve(template);
+        Path dst = Bukkit.getWorldContainer().toPath().resolve(worldName);
+        if (!Files.isDirectory(src)) {
+            result.completeExceptionally(new IOException("Шаблон не найден: " + src));
+            return result;
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                FileUtil.deleteRecursive(dst);
+                FileUtil.copyWorld(src, dst);
+            } catch (IOException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> result.completeExceptionally(e));
+                return;
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                try {
+                    World w = new WorldCreator(worldName)
+                            .generator(new VoidGenerator())
+                            .generateStructures(false)
+                            .createWorld();
+                    if (w == null) throw new IllegalStateException("createWorld вернул null");
+                    w.setAutoSave(false);
+                    result.complete(w);
+                } catch (Throwable t) {
+                    result.completeExceptionally(t);
+                }
+            });
+        });
+        return result;
+    }
+
+    /** Выгружает мир без сохранения и удаляет его папку. */
+    public void destroy(World world) {
+        if (world == null) return;
+        for (Player p : world.getPlayers()) plugin.hub().send(p);
+        Path dir = world.getWorldFolder().toPath();
+        if (!Bukkit.unloadWorld(world, false)) {
+            plugin.getLogger().warning("Не удалось выгрузить мир " + world.getName() + " (папка будет удалена при перезапуске)");
+            return;
+        }
+        if (shuttingDown) {
+            delete(dir);
+        } else {
+            // Небольшая задержка: даём серверу закрыть файлы регионов.
+            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> delete(dir), 40L);
+        }
+    }
+
+    private void delete(Path dir) {
+        try {
+            FileUtil.deleteRecursive(dir);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.WARNING, "Не удалось удалить " + dir, e);
+        }
+    }
+
+    /** Удаляет копии миров, оставшиеся после падения/рестарта сервера. */
+    public void cleanupLeftovers() {
+        File[] dirs = Bukkit.getWorldContainer().listFiles(f -> f.isDirectory() && f.getName().startsWith(PREFIX));
+        if (dirs == null) return;
+        for (File d : dirs) {
+            if (Bukkit.getWorld(d.getName()) != null) continue;
+            delete(d.toPath());
+            plugin.getLogger().info("Удалён старый игровой мир " + d.getName());
+        }
+    }
+
+    /** Сохраняет мир и копирует его в templates/<template> (для /mgp setup export). */
+    public CompletableFuture<Void> exportTemplate(World world, String template) {
+        world.save();
+        Path src = world.getWorldFolder().toPath();
+        Path dst = templatesDir.resolve(template);
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                FileUtil.deleteRecursive(dst);
+                FileUtil.copyWorld(src, dst);
+                result.complete(null);
+            } catch (IOException e) {
+                result.completeExceptionally(e);
+            }
+        });
+        return result;
+    }
+
+    public void setShuttingDown() { shuttingDown = true; }
+
+    /** Применяет геймрулы по их id (например show_death_messages, spawn_mobs — список: /gamerule в игре). */
+    @SuppressWarnings("unchecked")
+    public void applyGamerules(World world, Map<String, String> rules) {
+        var registry = RegistryAccess.registryAccess().getRegistry(RegistryKey.GAME_RULE);
+        for (Map.Entry<String, String> e : rules.entrySet()) {
+            NamespacedKey key = NamespacedKey.fromString(e.getKey().toLowerCase(java.util.Locale.ROOT));
+            GameRule<?> rule = key == null ? null : registry.get(key);
+            if (rule == null) {
+                plugin.getLogger().warning("Неизвестный gamerule: " + e.getKey());
+                continue;
+            }
+            try {
+                if (rule.getType() == Boolean.class) {
+                    world.setGameRule((GameRule<Boolean>) rule, Boolean.parseBoolean(e.getValue()));
+                } else if (rule.getType() == Integer.class) {
+                    world.setGameRule((GameRule<Integer>) rule, Integer.parseInt(e.getValue()));
+                }
+            } catch (Exception ex) {
+                plugin.getLogger().warning("Неверное значение gamerule " + e.getKey() + ": " + e.getValue());
+            }
+        }
+    }
+}

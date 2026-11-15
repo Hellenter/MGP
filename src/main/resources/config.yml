@@ -1,0 +1,42 @@
+# Префикс сообщений (MiniMessage: https://docs.advntr.dev/minimessage/format.html)
+prefix: "<dark_gray>[<gold>MGP<dark_gray>] <gray>"
+
+# Главное лобби (хаб). Сюда попадают игроки при входе и после игры.
+hub:
+  world: world
+  spawn: "0.5 65 0.5 0 0"     # x y z yaw pitch
+  gamemode: ADVENTURE
+  protect: true                # без урона/голода, ломать/ставить — только с правом mgp.admin
+  sidebar:
+    title: "<gold><bold>МИНИИГРЫ"
+    lines:
+      - "<dark_gray>────────────"
+      - "<gray>Игрок: <white>{player}"
+      - "<gray>Онлайн: <green>{online}"
+      - ""
+      - "<gray>Голодные игры: <yellow>{players_hunger_games}"
+      - "<gray>Билд баттл: <yellow>{players_build_battle}"
+      - "<dark_gray>────────────"
+      - "<yellow>play.myserver.ru"
+
+# Параметры типа голосования WEIGHTED (голоса добавляют шанс):
+# вес варианта = weight_варианта * base + голоса * per-vote
+voting:
+  weighted:
+    base: 1.0
+    per-vote: 1.0
+
+# Импорт готовых карт из большого мира (/mgp import или админ-панель)
+import:
+  margin-chunks: 0         # сколько чанков захватить вокруг области
+  chest-tiers:             # какой тир получают найденные сундуки по типу блока
+    CHEST: tier1
+    TRAPPED_CHEST: tier2
+
+# Админ-панель (веб-интерфейс в отдельном окне). Ссылка с ключом: /mgp panel
+panel:
+  enabled: true
+  host: 127.0.0.1          # 127.0.0.1 — только с этого компьютера; 0.0.0.0 — доступ по сети (осторожно!)
+  port: 8765
+  public-url: ""           # если сервер на хостинге: например http://1.2.3.4:8765
+  token: ""                # ключ доступа, генерируется автоматически

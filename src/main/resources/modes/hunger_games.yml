@@ -1,0 +1,240 @@
+# ===================== ГОЛОДНЫЕ ИГРЫ =====================
+type: hunger_games                 # какая логика используется (см. GameLogics.java)
+display-name: "<gold><bold>Голодные игры"
+icon: IRON_SWORD
+description:
+  - "<gray>Собирай лут в сундуках"
+  - "<gray>и останься последним выжившим!"
+
+min-players: 2
+max-players: 12                    # не больше, чем спавнов на картах
+max-sessions: 4                    # сколько игр этого режима может идти одновременно
+countdown: 60                      # отсчёт, когда набралось min-players
+fast-countdown: 10                 # ускоренный старт, когда лобби заполнено
+end-delay: 10                      # сколько секунд показывать итоги
+time-limit: "20:00"                # ограничение по времени сессии (0 — без ограничения)
+
+waiting:
+  template: hg_waiting             # шаблон мира лобби ожидания (plugins/MGP/templates/hg_waiting)
+  spawn: "0.5 65 0.5 0 0"
+  void-y: 0                        # упал ниже — вернём на спавн
+
+# Голосование за карту: MOST_VOTES | RANDOM_VOTED | WEIGHTED | NONE
+map-vote:
+  type: MOST_VOTES
+  options: 3                       # сколько случайных карт выставить на голосование (0 — все)
+
+natural-mobs: false
+gamerules:                         # id геймрулов в новых версиях: snake_case (список — /gamerule в игре)
+  show_advancement_messages: false
+  show_death_messages: false
+  immediate_respawn: true
+
+# ---------- Модификаторы ----------
+# selection: VOTE (голосуют в лобби) | RANDOM (случайно по weight) | FIXED (всегда fixed) | OFF
+modifiers:
+  time:
+    display: "<yellow>Время суток"
+    icon: CLOCK
+    selection: VOTE
+    vote-type: MOST_VOTES
+    options:
+      day:    { display: "<yellow>День",  icon: SUNFLOWER,    weight: 3, actions: ["time: 6000 lock"] }
+      sunset: { display: "<gold>Закат",   icon: ORANGE_TULIP, weight: 1, actions: ["time: 12500 lock"] }
+      night:  { display: "<blue>Ночь",    icon: BLACK_BED,    weight: 1, actions: ["time: 18000 lock"] }
+  weather:
+    display: "<aqua>Погода"
+    icon: WATER_BUCKET
+    selection: RANDOM
+    options:
+      clear: { display: "<yellow>Ясно",   weight: 6, actions: ["weather: clear"] }
+      rain:  { display: "<aqua>Дождь",    weight: 2, actions: ["weather: rain"] }
+      storm: { display: "<dark_aqua>Гроза", weight: 1, actions: ["weather: thunder"] }
+  health:
+    display: "<red>Здоровье"
+    icon: GOLDEN_APPLE
+    selection: OFF                 # поставь VOTE, чтобы голосовать (WEIGHTED: голоса добавляют шанс)
+    vote-type: WEIGHTED
+    options:
+      normal: { display: "<white>Обычное", weight: 5, actions: [] }
+      double: { display: "<red>Двойное (20 сердец)", weight: 1, actions: ["max-health: 40"] }
+      speed:  { display: "<aqua>Скорость", weight: 1, actions: ["effect: speed 0"] }
+
+# ---------- Наборы ----------
+default-kit: none
+kits:
+  none:
+    display: "<gray>Без набора"
+    icon: BARRIER
+    items: []
+  archer:
+    display: "<green>Лучник"
+    icon: BOW
+    description: ["<gray>Лук и 10 стрел"]
+    items: ["BOW", "ARROW 10"]
+  knight:
+    display: "<aqua>Рыцарь"
+    icon: IRON_CHESTPLATE
+    permission: mgp.kit.knight     # можно продавать/выдавать за донат
+    description: ["<gray>Железный нагрудник"]
+    items:
+      - { material: IRON_CHESTPLATE, slot: chest }
+start-items: []                    # предметы, которые получают все
+
+# ---------- Сундуки по тирам ----------
+# tier1/tier2 собраны по описаниям классического MCSG (MCGamer): форумные гайды,
+# фанатские копии режима (marotoweb/TheSurvivalGames, minecraftsurvivalgames.fandom).
+# Состав предметов — по источникам; веса подобраны вручную (оригинальных цифр не сохранилось).
+# T1 — обычные сундуки по карте: дерево/камень, кожа/золото, сырая еда, материалы для крафта.
+# T2 — у корнукопии и в труднодоступных местах: кольчуга/железо, приготовленная еда, алмазы, золотые яблоки.
+loot:
+  tier1:
+    rolls: 3-6                     # сколько предметов в сундуке
+    items:
+      # оружие и инструменты
+      - { item: "WOODEN_SWORD", weight: 8 }
+      - { item: "WOODEN_AXE", weight: 8 }
+      - { item: "STONE_AXE", weight: 5 }
+      - { item: "STONE_SWORD", weight: 2 }       # в T1 редкость
+      - { item: "GOLDEN_SWORD", weight: 3 }
+      - { item: "FISHING_ROD", weight: 4 }
+      - { item: "BOW", weight: 2 }
+      - { item: "ARROW", weight: 4, amount: 2-5 }
+      # броня
+      - { item: "LEATHER_HELMET", weight: 6 }
+      - { item: "LEATHER_CHESTPLATE", weight: 5 }
+      - { item: "LEATHER_LEGGINGS", weight: 5 }
+      - { item: "LEATHER_BOOTS", weight: 6 }
+      - { item: "GOLDEN_HELMET", weight: 3 }
+      - { item: "GOLDEN_CHESTPLATE", weight: 2 }
+      - { item: "GOLDEN_LEGGINGS", weight: 2 }
+      - { item: "GOLDEN_BOOTS", weight: 3 }
+      # сырая еда
+      - { item: "BEEF", weight: 6, amount: 1-2 }
+      - { item: "CHICKEN", weight: 6, amount: 1-2 }
+      - { item: "PORKCHOP", weight: 5, amount: 1-2 }
+      - { item: "COD", weight: 5, amount: 1-2 }
+      - { item: "APPLE", weight: 6, amount: 1-2 }
+      - { item: "CARROT", weight: 5, amount: 1-3 }
+      - { item: "POTATO", weight: 4, amount: 1-3 }
+      - { item: "PUMPKIN_PIE", weight: 3 }
+      - { item: "COOKIE", weight: 3, amount: 1-3 }
+      # материалы для крафта
+      - { item: "STICK", weight: 7, amount: 1-2 }
+      - { item: "FEATHER", weight: 5, amount: 1-3 }
+      - { item: "FLINT", weight: 5, amount: 1-2 }
+      - { item: "BONE", weight: 3, amount: 1-2 }
+      - { item: "WHEAT", weight: 4, amount: 1-2 }
+      - { item: "GOLD_INGOT", weight: 3 }
+      - { item: "IRON_INGOT", weight: 2 }
+      - { item: "FLINT_AND_STEEL", weight: 2 }
+      - { item: "EXPERIENCE_BOTTLE", weight: 2, amount: 1-2 }
+  tier2:
+    rolls: 3-5
+    items:
+      # броня
+      - { item: "CHAINMAIL_HELMET", weight: 5 }
+      - { item: "CHAINMAIL_CHESTPLATE", weight: 4 }
+      - { item: "CHAINMAIL_LEGGINGS", weight: 4 }
+      - { item: "CHAINMAIL_BOOTS", weight: 5 }
+      - { item: "IRON_HELMET", weight: 3 }
+      - { item: "IRON_CHESTPLATE", weight: 2 }
+      - { item: "IRON_LEGGINGS", weight: 2 }
+      - { item: "IRON_BOOTS", weight: 3 }
+      # оружие и снаряжение
+      - { item: "STONE_SWORD", weight: 6 }
+      - { item: "BOW", weight: 4 }
+      - { item: "ARROW", weight: 6, amount: 3-6 }
+      - { item: "FLINT_AND_STEEL", weight: 2 }
+      # материалы
+      - { item: "IRON_INGOT", weight: 6, amount: 1-2 }
+      - { item: "GOLD_INGOT", weight: 4, amount: 1-2 }
+      - { item: "DIAMOND", weight: 2 }           # в MCSG алмазы были главной редкостью
+      - { item: "STICK", weight: 3, amount: 1-2 }
+      # приготовленная еда
+      - { item: "COOKED_BEEF", weight: 6, amount: 1-2 }
+      - { item: "COOKED_CHICKEN", weight: 6, amount: 1-2 }
+      - { item: "COOKED_PORKCHOP", weight: 5, amount: 1-2 }
+      - { item: "BAKED_POTATO", weight: 5, amount: 1-3 }
+      - { item: "BREAD", weight: 5, amount: 1-2 }
+      - { item: "GOLDEN_CARROT", weight: 3, amount: 1-2 }
+      - { item: "CAKE", weight: 2 }
+      - { item: "GOLDEN_APPLE", weight: 3 }
+  tier3:                           # в классическом MCSG такого тира не было; оставлен для сундуков-«аирдропов»
+    rolls: 2-4
+    items:
+      - { item: "DIAMOND_SWORD", weight: 3 }
+      - { item: "DIAMOND_CHESTPLATE", weight: 2 }
+      - { item: { material: BOW, enchants: { power: 2 } }, weight: 3 }
+      - { item: "GOLDEN_APPLE", weight: 5, amount: 1-2 }
+      - { item: "ENDER_PEARL", weight: 3 }
+
+# ---------- Торговцы ----------
+trades:
+  default:
+    - { result: "ARROW 8", cost: "GOLD_INGOT 2" }
+    - { result: "GOLDEN_APPLE", cost: "GOLD_INGOT 6", max-uses: 2 }
+    - { result: { material: IRON_SWORD, enchants: { sharpness: 1 } }, cost: "GOLD_INGOT 10", cost2: "IRON_INGOT 2", max-uses: 1 }
+
+# ---------- События по времени (секунды или м:сс от начала игры) ----------
+# name показывается в инфо-панели как «следующее событие»
+timeline:
+  - name: "<aqua>Пополнение сундуков"
+    at: "5:00"
+    actions:
+      - "refill-chests"
+      - "title: <aqua>Сундуки пополнены!"
+      - "sound: minecraft:block.chest.open"
+  - name: "<red>Сужение барьера"
+    at: "10:00"
+    actions:
+      - "border: 60 120"
+      - "message: <red>Барьер сужается!"
+  - name: "<dark_red>Дезматч"
+    at: "15:00"
+    actions:
+      - "mode: deathmatch"
+      - "border: 30 30"
+
+# Действия для победителя (например, награда)
+win-actions:
+  - "message: <gold>+50 монет за победу!"
+  # - "command: eco give {player} 50"
+
+# ---------- Инфо-панель справа ----------
+# Плейсхолдеры: {map} {players} {max} {need} {countdown} {state} {alive} {kills} {time} {elapsed}
+#               {next_event} {next_event_time} {kit} {pvp}
+sidebar:
+  title: "<gold><bold>ГОЛОДНЫЕ ИГРЫ"
+  waiting:
+    - "<dark_gray>────────────"
+    - "<gray>Карта: {map}"
+    - "<gray>Игроки: <green>{players}/{max}"
+    - "<gray>Статус: <yellow>{state}"
+    - ""
+    - "<gray>Набор: {kit}"
+    - "<dark_gray>────────────"
+  playing:
+    - "<dark_gray>────────────"
+    - "<gray>Осталось времени: <yellow>{time}"
+    - "<gray>Живых игроков: <green>{alive}"
+    - "<gray>Убийств: <red>{kills}"
+    - ""
+    - "<gray>PvP: {pvp}"
+    - "{next_event} <white>{next_event_time}"
+    - ""
+    - "<gray>Карта: {map}"
+    - "<dark_gray>────────────"
+  ending:
+    - "<dark_gray>────────────"
+    - "<gold>Игра окончена!"
+    - "<gray>Убийств: <red>{kills}"
+    - "<dark_gray>────────────"
+
+# ---------- Настройки самого режима ----------
+settings:
+  freeze: 10                       # сек. стоим на спавнах перед стартом
+  grace-period: 30                 # сек. без PvP после старта
+  allow-place: true
+  breakable-blocks: [OAK_LEAVES, BIRCH_LEAVES, SPRUCE_LEAVES, SHORT_GRASS, TALL_GRASS, COBWEB, FERN]
+  time-up: draw                    # draw | most-kills — что делать, когда вышло время

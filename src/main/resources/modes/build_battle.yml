@@ -1,0 +1,85 @@
+# ===================== БИЛД БАТТЛ =====================
+type: build_battle
+display-name: "<light_purple><bold>Билд баттл"
+icon: BRICKS
+description:
+  - "<gray>Построй лучшее по теме"
+  - "<gray>и набери больше всех оценок!"
+
+min-players: 2
+max-players: 12                    # не больше, чем участков на картах
+max-sessions: 4
+countdown: 45
+fast-countdown: 10
+end-delay: 10
+time-limit: 0                      # у билд баттла свои таймеры фаз (settings)
+
+waiting:
+  template: bb_waiting
+  spawn: "0.5 65 0.5 0 0"
+  void-y: 0
+
+map-vote:
+  type: NONE                       # карта случайно, голосуем только за тему
+  options: 0
+
+natural-mobs: false
+gamerules:
+  show_advancement_messages: false
+
+modifiers:
+  time:
+    display: "<yellow>Время суток"
+    icon: CLOCK
+    selection: VOTE
+    vote-type: MOST_VOTES
+    options:
+      day:   { display: "<yellow>День", icon: SUNFLOWER, actions: ["time: 6000 lock"] }
+      night: { display: "<blue>Ночь", icon: BLACK_BED, actions: ["time: 18000 lock"] }
+
+kits: {}
+start-items: []
+loot: {}
+trades: {}
+timeline: []
+
+sidebar:
+  title: "<light_purple><bold>БИЛД БАТТЛ"
+  waiting:
+    - "<dark_gray>────────────"
+    - "<gray>Игроки: <green>{players}/{max}"
+    - "<gray>Статус: <yellow>{state}"
+    - "<dark_gray>────────────"
+  build:
+    - "<dark_gray>────────────"
+    - "<gray>Тема: <yellow>{theme}"
+    - "<gray>Осталось: <green>{phase_time}"
+    - "<gray>Игроков: <white>{alive}"
+    - "<dark_gray>────────────"
+  judging:
+    - "<dark_gray>────────────"
+    - "<gray>Тема: <yellow>{theme}"
+    - "<gray>Постройка: <white>{plot}"
+    - "<gray>Время на оценку: <green>{phase_time}"
+    - "<dark_gray>────────────"
+  ending:
+    - "<dark_gray>────────────"
+    - "<gold>Игра окончена!"
+    - "<dark_gray>────────────"
+
+settings:
+  disable-hunger: true
+  build-time: "5:00"
+  judge-time: 15                   # секунд на оценку одной постройки
+  plot-margin: 3                   # насколько можно отлететь за границу участка
+  theme-options: 5                 # сколько тем выставить на голосование
+  theme-vote: MOST_VOTES           # MOST_VOTES | RANDOM_VOTED | WEIGHTED | NONE
+  themes: [Замок, Корабль, Дракон, Пицца, Космос, Дерево, Робот, Пиратский остров, Кафе, Вулкан]
+  banned-items: [TNT, WITHER_SKELETON_SKULL, END_CRYSTAL, LAVA_BUCKET, ENDER_DRAGON_SPAWN_EGG, WITHER_SPAWN_EGG]
+  grades:
+    - { name: "<dark_red>Ужасно",   material: RED_TERRACOTTA,    points: 1 }
+    - { name: "<red>Плохо",         material: ORANGE_TERRACOTTA, points: 2 }
+    - { name: "<yellow>Нормально",  material: YELLOW_TERRACOTTA, points: 3 }
+    - { name: "<green>Хорошо",      material: LIME_TERRACOTTA,   points: 4 }
+    - { name: "<dark_green>Отлично", material: GREEN_TERRACOTTA, points: 5 }
+    - { name: "<gold><bold>Шедевр",  material: GOLD_BLOCK,       points: 6 }
