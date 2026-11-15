@@ -760,6 +760,7 @@ async function pageEditor(main, kind, id) {
   const body = h('div');
   const saveBtn = h('button', { id: 'save-btn', class: 'primary', disabled: true, onclick: save }, 'Сохранить');
   const head = h('div', { class: 'page-head' }, h('h1', null, title), h('span', { id: 'save-status', class: 'status' }, ''),
+    kind === 'map' ? h('button', { onclick: rename }, 'Переименовать') : null,
     kind !== 'config' ? h('button', { class: 'danger', onclick: del }, 'Удалить') : null, saveBtn);
   const tabBar = h('div', { class: 'tabs' });
   put(main, h('div', { class: 'page' }, head, tabBar, body));
@@ -801,6 +802,16 @@ async function pageEditor(main, kind, id) {
       toast('Сохранено и применено. Новые игры уже используют эти настройки.');
       await refreshLists();
     } catch (e) { saveBtn.disabled = false; toast(e.message, true); }
+  }
+  async function rename() {
+    if (S.dirty && !confirm('Несохранённые изменения будут потеряны. Продолжить?')) return;
+    const to = (prompt(`Новый id карты «${id}» (a-z, 0-9 и _). Спавны, сундуки и шаблон перенесутся.`, id) || '').trim().toLowerCase();
+    if (!to || to === id) return;
+    const name = prompt('Новое название (MiniMessage). Оставь пустым, чтобы не менять.', '') || '';
+    try {
+      const r = await api('POST', `maps/${id}/rename`, { to, name: name.trim() || null });
+      S.dirty = false; toast(r.message); await refreshLists(); location.hash = '#/map/' + r.map;
+    } catch (e) { toast(e.message, true); }
   }
   async function del() {
     if (!confirm(`Удалить ${kind === 'mode' ? 'режим' : 'карту'} «${id}»? Файл будет удалён.`)) return;

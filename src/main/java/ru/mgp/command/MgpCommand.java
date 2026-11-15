@@ -29,9 +29,13 @@ public final class MgpCommand implements TabExecutor {
 
     public MgpCommand(MGPPlugin plugin) {
         this.plugin = plugin;
-        SelectionDisplay display = new SelectionDisplay(pos1, pos2, posWorld);
-        org.bukkit.Bukkit.getScheduler().runTaskTimer(plugin, display::tick, 20L, 10L);
+        this.display = new SelectionDisplay(plugin, pos1, pos2, posWorld);
     }
+
+    private final SelectionDisplay display;
+
+    /** Убрать рамки выделения (при выключении плагина). */
+    public void shutdown() { display.removeAll(); }
 
     private boolean optimizeBorders() { return plugin.getConfig().getBoolean("import.optimize-borders", true); }
 
@@ -87,6 +91,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.saveConfig();
                 Msg.send(p, "<green>Спавн хаба: " + p.getWorld().getName() + " " + pos.serialize() + ". Сюда попадают при входе, после игры и по /hub.");
             }
+            case "rename" -> { if (admin(sender)) renameMap(sender, a); }
             case "optimize" -> {
                 if (!admin(sender)) return true;
                 try { optimizeMap(sender, a); } catch (IllegalArgumentException e) { Msg.send(sender, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
@@ -166,6 +171,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp setup</gold> — список команд настройки карт");
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
+            Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
             Msg.send(s, "<gold>/mgp optimize <карта></gold> — оптимизация границ готовой карты: обрезать края, где только воздух");
         }
     }
@@ -190,6 +196,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
                     "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
+                    "<yellow>/mgp setup rename <карта> <новый id> [название]</yellow> — переименовать карту",
                     "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
@@ -253,9 +260,11 @@ public final class MgpCommand implements TabExecutor {
                 case "pos1", "pos2" -> setPos(p, sub.equals("pos1"), Pos.ofBlock(loc));
                 case "clearsel" -> {
                     pos1.remove(p.getUniqueId()); pos2.remove(p.getUniqueId()); posWorld.remove(p.getUniqueId());
+                    display.remove(p.getUniqueId());
                     Msg.send(p, "<green>Выделение убрано.");
                 }
                 case "optimize" -> optimizeMap(p, a);
+                case "rename" -> renameMap(p, a);
                 case "plot" -> {
                     Pos[] sel = selection(p);
                     if (sel == null) return;
@@ -411,11 +420,13 @@ public final class MgpCommand implements TabExecutor {
         String size = a != null && b != null ? "  <gray>(" + (Math.abs(a.bx() - b.bx()) + 1) + "×" + (Math.abs(a.by() - b.by()) + 1)
                 + "×" + (Math.abs(a.bz() - b.bz()) + 1) + ")" : "";
         Msg.send(p, (first ? "<red>■ <green>pos1 = " : "<blue>■ <green>pos2 = ") + pos.serialize() + size);
+        display.update(p);
     }
 
     private void showBox(Player p, ru.mgp.util.Region b) {
         pos1.put(p.getUniqueId(), b.min());
         pos2.put(p.getUniqueId(), b.max());
+        display.update(p);
         Msg.send(p, "<gray>Рамка выделения теперь показывает обрезанную область.");
     }
 
@@ -441,6 +452,17 @@ public final class MgpCommand implements TabExecutor {
             if (!r.trimmed()) Msg.send(p, "<gray>Пустых краёв не нашлось — область и так плотная.");
             if (p instanceof Player pl && pl.getWorld().equals(w)) { posWorld.put(pl.getUniqueId(), w.getName()); showBox(pl, r.box()); }
         });
+    }
+
+    /** /mgp setup rename <карта> <новый id> [название...] */
+    private void renameMap(CommandSender s, String[] a) {
+        if (a.length < 3) { Msg.send(s, "<red>/mgp setup rename <карта> <новый id> [название]"); return; }
+        String name = a.length > 3 ? String.join(" ", Arrays.copyOfRange(a, 3, a.length)) : null;
+        try {
+            Msg.send(s, "<green>" + Msg.esc(ru.mgp.world.MapRenamer.rename(plugin, a[1], a[2], name)));
+        } catch (IllegalArgumentException | IllegalStateException | IOException e) {
+            Msg.send(s, "<red>" + Msg.esc(String.valueOf(e.getMessage())));
+        }
     }
 
     private Pos[] selection(Player p) {
@@ -552,8 +574,8 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "sethub", "debug"));
-            } else if (a.length == 2 && a[0].equalsIgnoreCase("optimize")) {
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "debug"));
+            } else if (a.length == 2 && (a[0].equalsIgnoreCase("optimize") || a[0].equalsIgnoreCase("rename"))) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("import")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
@@ -563,7 +585,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "optimize", "plot", "trigger", "waiting", "lobby", "info"));
+                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "plot", "trigger", "waiting", "lobby", "info"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))

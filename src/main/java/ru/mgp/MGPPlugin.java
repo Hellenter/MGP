@@ -62,6 +62,7 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(new GameListener(this), this);
 
         MgpCommand cmd = new MgpCommand(this);
+        this.mgpCommand = cmd;
         for (String name : new String[]{"mgp", "leave", "play"}) {
             PluginCommand c = getCommand(name);
             if (c != null) { c.setExecutor(cmd); c.setTabCompleter(cmd); }
@@ -79,8 +80,11 @@ public final class MGPPlugin extends JavaPlugin {
         for (Player p : Bukkit.getOnlinePlayers()) hub.send(p);
     }
 
+    private MgpCommand mgpCommand;
+
     @Override
     public void onDisable() {
+        if (mgpCommand != null) mgpCommand.shutdown();
         if (panel != null) panel.stop();
         if (sessions != null) sessions.shutdown();
     }
