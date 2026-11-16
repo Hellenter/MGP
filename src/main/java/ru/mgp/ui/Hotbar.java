@@ -34,10 +34,15 @@ public final class Hotbar {
         if (ru.mgp.util.Keys.tag(p.getItemOnCursor()) != null) p.setItemOnCursor(null);
     }
 
+    /** В креативе (стройка) и в наблюдателе предметы хаба не выдаются. */
+    public static boolean noHubItems(org.bukkit.GameMode gm) {
+        return gm == org.bukkit.GameMode.CREATIVE || gm == org.bukkit.GameMode.SPECTATOR;
+    }
+
     public static void giveHub(Player p) {
         PlayerInventory inv = p.getInventory();
-        // в креативе (стройка) и с выключенным хотбаром предметы режимов не мешают
-        if (hubHidden(p) || p.getGameMode() == org.bukkit.GameMode.CREATIVE) return;
+        // в креативе/наблюдателе и с выключенным хотбаром предметы режимов не мешают
+        if (hubHidden(p) || noHubItems(p.getGameMode())) return;
         inv.setItem(0, tagged(Material.COMPASS, "<green><bold>Выбор игры</bold> <gray>(ПКМ)", SELECTOR));
         for (LinkedServers.Server s : MGPPlugin.getPlugin(MGPPlugin.class).servers().all()) {
             if (s.hotbarSlot() < 1 || s.hotbarSlot() > 8) continue;
