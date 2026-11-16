@@ -113,6 +113,7 @@ public final class PlayZone {
         if (!active()) return;
         Player p = e.getPlayer();
         if (p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return; // ждёт возрождения — летает где угодно
+        if (s.logic().zoneFree(p)) return; // например, лимбо штурма — отдельная комната вне зоны
         Location to = e.getTo();
         if (allowed(p, to)) {
             drawEdges(p, to);

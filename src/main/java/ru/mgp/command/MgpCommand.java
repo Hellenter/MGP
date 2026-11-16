@@ -276,6 +276,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup zone <карта> [clear]</yellow> — play-зона из выделения: за неё не выйти, вылетевших возвращает",
                     "<yellow>/mgp setup teamzone <карта> <команда> [clear]</yellow> — стартовая зона команды; <yellow>teamzone <карта> open <сек></yellow> — когда границы снимаются",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
+                    "<yellow>/mgp setup assault <карта></yellow> — штурм: стадии, цели стадий, спавны стадий, лимбо и выход из него",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
                     "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
                     "<yellow>/mgp setup lobby default</yellow> — общее лобби ожидания для всех режимов без своего",
@@ -336,6 +337,7 @@ public final class MgpCommand implements TabExecutor {
                     if (locked && group == null) Msg.send(p, "<red>Закрытому спавну нужна группа, иначе его нечем открыть: /mgp setup teamspawn <карта> <команда> <группа> locked");
                 }
                 case "objective" -> objective(p, a);
+                case "assault" -> setupAssault(p, a);
                 case "fortress" -> {
                     // /mgp setup fortress <карта> [clear | list | del <n> | tp <n>] — области крепости для осады из выделения pos1/pos2
                     need(a, 2);
@@ -952,6 +954,192 @@ public final class MgpCommand implements TabExecutor {
         }
     }
 
+    // ------------------------------------------------------------------ штурм: стадии, лимбо
+
+    private static final List<String> ASSAULT_HELP = List.of(
+            "<gold>Штурм (assault) — настройка карты:",
+            "<yellow>/mgp setup objective <карта> <id> [процент] [название]</yellow> — цель из выделения pos1/pos2",
+            "<yellow>/mgp setup assault <карта> stage <n> [время] [название]</yellow> — создать/изменить стадию (время 15:00)",
+            "<yellow>/mgp setup assault <карта> stage <n> objective <id></yellow> — цель в стадию (<yellow>-id</yellow> — убрать)",
+            "<yellow>/mgp setup assault <карта> stage <n> spawn <attackers|defenders></yellow> — спавн стадии там, где стоишь",
+            "<yellow>/mgp setup assault <карта> stage <n> require <all|число></yellow> — сколько целей разрушить",
+            "<yellow>/mgp setup assault <карта> stage <n> action <действие></yellow> — при начале стадии (clearactions, remove)",
+            "<yellow>/mgp setup assault <карта> limbo <attackers|defenders></yellow> — лимбо команды там, где стоишь",
+            "<yellow>/mgp setup assault <карта> exit [имя]</yellow> — выход из лимбо из выделения pos1/pos2 (триггер mode: deploy)",
+            "<yellow>/mgp setup assault <карта> info</yellow> — что уже настроено");
+
+    private static String assaultTeam(String s) {
+        String v = s.toLowerCase(Locale.ROOT);
+        if (v.startsWith("a") || v.startsWith("ат")) return "attackers";
+        if (v.startsWith("d") || v.startsWith("з")) return "defenders";
+        throw new IllegalArgumentException("Команда: attackers или defenders");
+    }
+
+    private void setupAssault(Player p, String[] a) {
+        if (a.length < 3) { ASSAULT_HELP.forEach(l -> Msg.send(p, l)); return; }
+        Location loc = p.getLocation();
+        switch (a[2].toLowerCase(Locale.ROOT)) {
+            case "limbo" -> {
+                need(a, 4);
+                String team = assaultTeam(a[3]);
+                edit(p, a, 4, y -> y.set("limbo." + team, Pos.of(loc).serialize()),
+                        "Лимбо команды " + team + " — здесь. Сюда попадают после смерти и в начале игры.");
+                Msg.send(p, "<gray>Лимбо должно быть внутри play-зоны (если она есть). Поставь там продавца (/mgp shop) "
+                        + "или оставь изумруд-магазин в хотбаре, и сделай выход: <yellow>/mgp setup assault " + a[1] + " exit");
+            }
+            case "exit" -> {
+                Pos[] sel = selection(p);
+                if (sel == null) return;
+                String name = a.length > 3 ? a[3] : "limbo_exit";
+                edit(p, a, 3, y -> {
+                    List<Map<?, ?>> l = new ArrayList<>(y.getMapList("triggers"));
+                    l.removeIf(m -> name.equals(String.valueOf(m.get("name"))));
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("name", name);
+                    m.put("min", sel[0].serialize());
+                    m.put("max", sel[1].serialize());
+                    m.put("mode", "REPEAT");
+                    m.put("actions", List.of("mode: deploy"));
+                    l.add(m);
+                    y.set("triggers", l);
+                }, "Выход из лимбо «" + name + "»: кто войдёт в эту область, попадёт на текущий спавн своей команды");
+                Msg.send(p, "<gray>Можно сделать и кнопку/плиту: <yellow>/mgp setup script " + a[1] + " <id> button</yellow> + действие <white>mode: deploy");
+            }
+            case "stage" -> assaultStage(p, a);
+            case "info", "list" -> assaultInfo(p, a);
+            default -> ASSAULT_HELP.forEach(l -> Msg.send(p, l));
+        }
+    }
+
+    /** /mgp setup assault <карта> stage <n> ... */
+    private void assaultStage(Player p, String[] a) {
+        need(a, 4);
+        int n;
+        try { n = Integer.parseInt(a[3]); } catch (NumberFormatException e) { throw new IllegalArgumentException("Номер стадии — число от 1"); }
+        if (n < 1) throw new IllegalArgumentException("Номер стадии — число от 1");
+        String sub = a.length > 4 ? a[4].toLowerCase(Locale.ROOT) : "";
+        MapConfig mc = plugin.registry().map(a[1]);
+        Location loc = p.getLocation();
+        switch (sub) {
+            case "objective" -> {
+                need(a, 6);
+                boolean remove = a[5].startsWith("-");
+                String id = remove ? a[5].substring(1) : a[5];
+                if (!remove && mc != null && mc.objectives.stream().noneMatch(o -> o.id().equals(id)))
+                    Msg.send(p, "<yellow>Цели " + Msg.esc(id) + " на карте пока нет — создай: /mgp setup objective " + a[1] + " " + Msg.esc(id) + " <процент>");
+                edit(p, a, 6, y -> editStage(y, n, false, m -> {
+                    List<String> l = new ArrayList<>(Cfg.strings(m.get("objectives")));
+                    l.remove(id);
+                    if (!remove) l.add(id);
+                    m.put("objectives", l);
+                }), (remove ? "Цель " + id + " убрана из стадии " : "Цель " + id + " добавлена в стадию ") + n);
+            }
+            case "spawn" -> {
+                need(a, 6);
+                String team = assaultTeam(a[5]);
+                edit(p, a, 6, y -> {
+                    String[] group = new String[1];
+                    editStage(y, n, false, m -> group[0] = Cfg.str(m, "spawn-group", "stage" + n));
+                    Map<String, Object> sp = new LinkedHashMap<>();
+                    sp.put("pos", Pos.of(loc).serialize());
+                    sp.put("team", team);
+                    sp.put("group", group[0]);
+                    addMap(y, "spawn-points", sp);
+                }, "Спавн стадии " + n + " для " + team + " добавлен");
+            }
+            case "require" -> {
+                need(a, 6);
+                String v = a[5].equalsIgnoreCase("all") ? "all" : String.valueOf(Math.max(1, Integer.parseInt(a[5])));
+                edit(p, a, 6, y -> editStage(y, n, false, m -> m.put("require", v)),
+                        "Стадия " + n + ": нужно разрушить " + (v.equals("all") ? "все цели" : v + " цел."));
+            }
+            case "action" -> {
+                need(a, 6);
+                String act = String.join(" ", Arrays.copyOfRange(a, 5, a.length));
+                edit(p, a, 6, y -> editStage(y, n, false, m -> {
+                    List<String> l = new ArrayList<>(Cfg.strings(m.get("actions")));
+                    l.add(act);
+                    m.put("actions", l);
+                }), "Действие при начале стадии " + n + ": " + Msg.esc(act));
+            }
+            case "clearactions" -> edit(p, a, 5, y -> editStage(y, n, false, m -> m.put("actions", new ArrayList<String>())),
+                    "Действия стадии " + n + " очищены");
+            case "remove" -> edit(p, a, 5, y -> {
+                List<Map<?, ?>> l = new ArrayList<>(y.getMapList("stages"));
+                if (n > l.size()) throw new IllegalArgumentException("Стадии " + n + " нет");
+                l.remove(n - 1);
+                y.set("stages", l.isEmpty() ? null : l);
+            }, "Стадия " + n + " удалена (её спавны остались в spawn-points — удали вручную, если не нужны)");
+            default -> {
+                // stage <n> [время] [название...]
+                String time = null;
+                int nameFrom = 4;
+                if (a.length > 4 && a[4].matches("\\d+(:\\d{1,2})?")) { time = a[4]; nameFrom = 5; }
+                String name = a.length > nameFrom ? String.join(" ", Arrays.copyOfRange(a, nameFrom, a.length)) : null;
+                String ft = time;
+                edit(p, a, 4, y -> editStage(y, n, true, m -> {
+                    if (ft != null) m.put("time", ft);
+                    if (name != null) m.put("name", name.contains("<") ? name : "<yellow>" + name);
+                }), "Стадия " + n + (ft != null ? ": время " + ft : "") + (name != null ? ", " + Msg.esc(name) : ""));
+                Msg.send(p, "<gray>Дальше: <yellow>stage " + n + " objective <id></yellow>, <yellow>stage " + n + " spawn attackers</yellow> и <yellow>defenders");
+            }
+        }
+    }
+
+    /** Найти стадию n (1..) в stages; create — можно создать следующую по счёту. */
+    private static void editStage(YamlConfiguration y, int n, boolean create, java.util.function.Consumer<Map<String, Object>> fn) {
+        List<Map<String, Object>> l = new ArrayList<>();
+        for (Map<?, ?> raw : y.getMapList("stages")) l.add(new LinkedHashMap<>(Cfg.asMap(raw)));
+        if (n > l.size() + 1) throw new IllegalArgumentException("Сначала создай стадию " + (l.size() + 1) + ": /mgp setup assault <карта> stage " + (l.size() + 1));
+        if (n == l.size() + 1) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("name", "<yellow>Стадия " + n);
+            m.put("time", "15:00");
+            m.put("objectives", new ArrayList<String>());
+            m.put("require", "all");
+            m.put("spawn-group", "stage" + n);
+            m.put("actions", new ArrayList<String>());
+            l.add(m);
+        }
+        fn.accept(l.get(n - 1));
+        y.set("stages", l);
+    }
+
+    private void assaultInfo(Player p, String[] a) {
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        Msg.send(p, "<gold>Штурм на карте " + m.id + ":");
+        var lb = m.yaml.getConfigurationSection("limbo");
+        for (String team : List.of("attackers", "defenders")) {
+            String pos = lb == null ? null : lb.getString(team);
+            p.sendMessage(Msg.parse("<gray>Лимбо " + team + ": " + (pos == null ? "<red>нет" : "<white>" + pos)));
+        }
+        boolean exit = false;
+        for (MapConfig.Trigger tr : m.triggers) for (String act : tr.actions()) if (act.replace(" ", "").toLowerCase(Locale.ROOT).startsWith("mode:deploy")) exit = true;
+        for (MapConfig.Script sc : m.scripts) for (String act : sc.actions()) if (act.replace(" ", "").toLowerCase(Locale.ROOT).startsWith("mode:deploy")) exit = true;
+        p.sendMessage(Msg.parse("<gray>Выход из лимбо: " + (exit ? "<green>есть" : "<yellow>нет — в лимбо будет кнопка «В бой»")));
+        List<Map<?, ?>> stages = m.yaml.getMapList("stages");
+        if (stages.isEmpty()) {
+            p.sendMessage(Msg.parse("<yellow>Стадий нет — будет одна стадия со всеми целями карты (" + m.objectives.size() + ")."));
+            return;
+        }
+        for (int i = 0; i < stages.size(); i++) {
+            Map<String, Object> s = Cfg.asMap(stages.get(i));
+            String group = Cfg.str(s, "spawn-group", "stage" + (i + 1));
+            int att = 0, def = 0;
+            for (MapConfig.SpawnPoint sp : m.spawnPoints) if (group.equalsIgnoreCase(String.valueOf(sp.group()))) {
+                if ("attackers".equals(sp.team())) att++;
+                else if ("defenders".equals(sp.team())) def++;
+            }
+            List<String> objs = new ArrayList<>();
+            for (String id : Cfg.strings(s.get("objectives")))
+                objs.add(m.objectives.stream().anyMatch(o -> o.id().equals(id)) ? "<white>" + Msg.esc(id) : "<red>" + Msg.esc(id) + "?");
+            p.sendMessage(Msg.parse("<gold>" + (i + 1) + ".</gold> " + Cfg.str(s, "name", "Стадия " + (i + 1)) + " <gray>— " + Cfg.str(s, "time", "по умолчанию")
+                    + ", цели: " + (objs.isEmpty() ? "<red>нет" : String.join("<gray>, ", objs)) + " <gray>(нужно " + Cfg.str(s, "require", "all") + ")"
+                    + ", спавны: " + (att == 0 ? "<red>" : "<white>") + att + " атаки<gray>, " + (def == 0 ? "<red>" : "<white>") + def + " защиты"));
+        }
+    }
+
     /** Найти цель по id в objectives (или создать) и изменить. */
     private static void editObjective(YamlConfiguration y, String id, java.util.function.Consumer<Map<String, Object>> fn) {
         List<Map<String, Object>> out = new ArrayList<>();
@@ -1251,7 +1439,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
-                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info", "assault"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -1273,6 +1461,17 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
             } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("modes")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
+            } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("assault")) {
+                if (a.length == 4) out.addAll(List.of("stage", "limbo", "exit", "info"));
+                else if (a.length == 5 && a[3].equalsIgnoreCase("limbo")) out.addAll(List.of("attackers", "defenders"));
+                else if (a.length == 5 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("1", "2", "3"));
+                else if (a.length == 6 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("15:00", "objective", "spawn", "require", "action", "clearactions", "remove"));
+                else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("spawn")) out.addAll(List.of("attackers", "defenders"));
+                else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("require")) out.addAll(List.of("all", "1", "2"));
+                else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("objective")) {
+                    MapConfig mc = plugin.registry().map(a[2]);
+                    if (mc != null) mc.objectives.forEach(o -> { out.add(o.id()); out.add("-" + o.id()); });
+                }
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
                 out.addAll(List.of("all", "seeker", "hider", "defenders", "attackers"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {

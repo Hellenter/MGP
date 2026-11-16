@@ -66,7 +66,8 @@ public final class ShopEditMenu extends ShopMenu {
                 ItemStack it = display(null, pr);
                 ItemMeta meta = it.getItemMeta();
                 List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
-                lore.add(Msg.item("<gray>Цена: " + Shop.currencyColor(pr.currency) + Shop.currencyName(pr.currency, pr.price)));
+                if (pr.isBundle()) for (ItemStack ci : pr.contents) lore.add(Msg.item("<dark_gray>• <white>" + ShopService.itemName(ci)));
+                lore.add(Msg.item("<gray>Цена: " + pr.priceColor() + pr.priceText(pr.price)));
                 lore.add(Msg.item(""));
                 lore.add(Msg.item("<yellow>ЛКМ <gray>— цена и количество"));
                 lore.add(Msg.item("<yellow>Shift+ЛКМ <gray>— левее"));
@@ -104,6 +105,9 @@ public final class ShopEditMenu extends ShopMenu {
             shop.profession = PROFESSIONS.get((i + (click.isRightClick() ? PROFESSIONS.size() - 1 : 1)) % PROFESSIONS.size());
             saveAndReopen(pl, cat);
         });
+        set(50, Items.icon(Material.BUNDLE, "<gold><bold>+ Набор из инвентаря", List.of(
+                "<gray>Все предметы твоего инвентаря (и надетая броня)", "<gray>станут одним товаром — покупаются разом.",
+                "<gray>Цена по умолчанию — монеты счёта (Штурм)"), false), pl -> addBundle(pl));
         set(49, Items.icon(Material.EMERALD, "<green><bold>Посмотреть как игрок", List.of("<gray>Открыть витрину без редактора"), false),
                 pl -> new ShopMenu(service, shop, cat).open(pl));
         set(51, Items.icon(Material.ARMOR_STAND, "<gold><bold>Поставить продавца здесь", List.of(
@@ -131,6 +135,30 @@ public final class ShopEditMenu extends ShopMenu {
         service.save(shop);
         p.playSound(p.getLocation(), org.bukkit.Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.2f);
         new ProductMenu(service, shop, cat, c.products.size() - 1).open(p);
+    }
+
+    /** Набор: всё из инвентаря редактора (кроме служебных предметов) — один товар. */
+    private void addBundle(Player p) {
+        if (shop.categories.isEmpty()) { Msg.send(p, "<red>Сначала добавь категорию"); return; }
+        Shop.Category c = shop.categories.get(cat);
+        if (c.products.size() >= SLOTS.length) { Msg.send(p, "<red>В категории нет места (максимум " + SLOTS.length + ")"); return; }
+        List<ItemStack> items = new ArrayList<>();
+        var inv = p.getInventory();
+        for (ItemStack it : inv.getArmorContents()) if (it != null && !it.getType().isAir()) items.add(it.clone());
+        if (!inv.getItemInOffHand().getType().isAir()) items.add(inv.getItemInOffHand().clone());
+        for (ItemStack it : inv.getStorageContents())
+            if (it != null && !it.getType().isAir() && ru.mgp.util.Keys.tag(it) == null) items.add(it.clone());
+        if (items.isEmpty()) { Msg.send(p, "<red>Инвентарь пуст: сложи в него (и надень) всё, что должно быть в наборе"); return; }
+        service.plugin().wand().ask(p, "<aqua>Название набора <gray>(например <gold>Штурмовик)", text -> {
+            String name = text.contains("<") ? text : "<gold>" + text;
+            Shop.Product pr = new Shop.Product(Shop.Product.bundleIcon(items.get(0).getType(), name, items), Material.GOLD_NUGGET, 500);
+            pr.contents = items;
+            pr.bundleName = name;
+            pr.money = true;
+            c.products.add(pr);
+            service.save(shop);
+            new ProductMenu(service, shop, cat, c.products.size() - 1).open(p);
+        });
     }
 
     private void placeTrader(Player p) {

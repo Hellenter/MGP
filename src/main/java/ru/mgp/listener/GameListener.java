@@ -101,6 +101,12 @@ public final class GameListener implements Listener {
     }
 
     @EventHandler(ignoreCancelled = true)
+    public void onBlockExplode(org.bukkit.event.block.BlockExplodeEvent e) {
+        GameSession s = plugin.sessions().byWorld(e.getBlock().getWorld());
+        if (s != null && s.isPlaying()) s.logic().onBlockExplode(e);
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent e) {
         GameSession s = of(e.getPlayer());
         if (s == null) return;

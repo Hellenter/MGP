@@ -86,7 +86,7 @@ public final class Objectives {
         World w = s.gameWorld();
         if (w == null) return;
         for (State st : states) {
-            if (st.done) continue;
+            if (st.done || !s.logic().objectiveActive(st.o.id())) continue;
             Region r = st.o.region();
             int gone = 0;
             for (int i = st.solid.nextSetBit(0); i >= 0; i = st.solid.nextSetBit(i + 1)) {
@@ -99,6 +99,7 @@ public final class Objectives {
                 st.done = true;
                 s.broadcast(st.o.name() + " <gray>разрушен" + " <dark_gray>(" + Math.round(st.percent()) + "%)");
                 ActionRunner.run(s, st.o.actions(), null);
+                if (s.isPlaying()) s.logic().onObjectiveDestroyed(st.o);
             }
         }
         updateBars();
@@ -106,7 +107,7 @@ public final class Objectives {
 
     private void updateBars() {
         State cur = null;
-        for (State st : states) if (!st.done && st.o.show()) { cur = st; break; }
+        for (State st : states) if (!st.done && st.o.show() && s.logic().objectiveActive(st.o.id())) { cur = st; break; }
         for (Player p : s.online()) {
             BossBar bar = shown.get(p.getUniqueId());
             if (cur == null) {
@@ -124,6 +125,24 @@ public final class Objectives {
                 bar.progress(prog);
             }
         }
+    }
+
+    /** Разрушена ли цель (false — нет такой цели или она ещё стоит). */
+    public boolean isDone(String id) {
+        for (State st : states) if (st.o.id().equals(id)) return st.done;
+        return false;
+    }
+
+    /** Есть ли такая цель в игре (в области были блоки). */
+    public boolean has(String id) {
+        for (State st : states) if (st.o.id().equals(id)) return true;
+        return false;
+    }
+
+    /** Прогресс в процентах от нужного (0..100) для цели id; -1 — нет такой. */
+    public int progressOf(String id) {
+        for (State st : states) if (st.o.id().equals(id)) return st.done ? 100 : (int) Math.min(100, Math.floor(st.percent() * 100 / st.o.percent()));
+        return -1;
     }
 
     /** Прогресс для /mgp и плейсхолдеров: id → проценты. */

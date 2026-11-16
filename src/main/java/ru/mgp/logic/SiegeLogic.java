@@ -18,7 +18,6 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.BoundingBox;
-import ru.mgp.party.Party;
 import ru.mgp.session.ActionRunner;
 import ru.mgp.session.GameSession;
 import ru.mgp.util.*;
@@ -150,25 +149,8 @@ public final class SiegeLogic extends GameLogic {
 
     /** Делим по командам, пати остаются вместе. */
     private void assignTeams(List<Player> all) {
-        Map<Object, List<Player>> groups = new LinkedHashMap<>();
-        for (Player p : all) {
-            Party party = session.plugin().parties().of(p);
-            groups.computeIfAbsent(party != null ? party : p.getUniqueId(), k -> new ArrayList<>()).add(p);
-        }
-        List<List<Player>> gl = new ArrayList<>(groups.values());
-        Collections.shuffle(gl, session.random());
-        gl.sort(Comparator.comparingInt((List<Player> g) -> -g.size()));
-        int want = Math.max(1, Math.min(all.size() - 1, (int) Math.round(all.size() * defenderRatio)));
-        int def = 0;
-        for (List<Player> g : gl) {
-            boolean toDef = def < want && (def + g.size() <= want || def == 0);
-            for (Player p : g) teams.put(p.getUniqueId(), toDef ? Team.DEFENDERS : Team.ATTACKERS);
-            if (toDef) def += g.size();
-        }
-        // все в одной команде (одна большая пати) — делим поровну, иначе играть некому
-        if (def == 0 || def == all.size()) {
-            for (int i = 0; i < all.size(); i++) teams.put(all.get(i).getUniqueId(), i < want ? Team.DEFENDERS : Team.ATTACKERS);
-        }
+        Set<UUID> def = TeamSplit.defenders(session, all, defenderRatio);
+        for (Player p : all) teams.put(p.getUniqueId(), def.contains(p.getUniqueId()) ? Team.DEFENDERS : Team.ATTACKERS);
     }
 
     // ------------------------------------------------------------------ старт

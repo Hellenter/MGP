@@ -37,7 +37,7 @@ public final class MGPPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        for (String res : new String[]{"modes/hunger_games.yml", "modes/build_battle.yml", "modes/hide_and_seek.yml", "modes/prop_hunt.yml", "modes/siege.yml",
+        for (String res : new String[]{"modes/hunger_games.yml", "modes/build_battle.yml", "modes/hide_and_seek.yml", "modes/prop_hunt.yml", "modes/siege.yml", "modes/assault.yml",
                 "maps/hg_example.yml", "maps/bb_example.yml"}) {
             if (!new File(getDataFolder(), res).exists()) saveResource(res, false);
         }

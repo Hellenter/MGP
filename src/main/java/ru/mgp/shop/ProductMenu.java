@@ -28,7 +28,7 @@ final class ProductMenu extends Menu {
         if (pr == null) return;
 
         set(4, pr.item.clone(), null);
-        setClick(13, Items.icon(Material.HOPPER, "<white>Выдаётся: <aqua>" + pr.item.getAmount() + " шт.", List.of(
+        if (!pr.isBundle()) setClick(13, Items.icon(Material.HOPPER, "<white>Выдаётся: <aqua>" + pr.item.getAmount() + " шт.", List.of(
                 "", "<yellow>ЛКМ <gray>+1  <yellow>ПКМ <gray>−1", "<yellow>Shift <gray>— по 8"), false), (p, c) -> {
             int max = pr.item.getMaxStackSize();
             pr.item.setAmount(Math.max(1, Math.min(max, pr.item.getAmount() + step(c, 1, 8))));
@@ -37,19 +37,25 @@ final class ProductMenu extends Menu {
 
         for (int i = 0; i < CURRENCIES.length; i++) {
             Material m = CURRENCIES[i];
-            boolean sel = pr.currency == m;
+            boolean sel = !pr.money && pr.currency == m;
             set(19 + i * 2, Items.icon(m, Shop.currencyColor(m) + "<bold>" + Shop.pretty(m), List.of(sel ? "<green>✔ Валюта товара" : "<yellow>Нажми — платить этим"), sel), p -> {
                 pr.currency = m;
+                pr.money = false;
                 save(p);
             });
         }
-        boolean custom = java.util.Arrays.stream(CURRENCIES).noneMatch(m -> m == pr.currency);
+        set(29, Items.icon(Material.SUNFLOWER, "<gold><bold>Монеты счёта", List.of("<gray>Платить монетами, которые игрок", "<gray>зарабатывает в игре (Штурм)",
+                pr.money ? "<green>✔ Валюта товара" : "<yellow>Нажми — платить монетами"), pr.money), p -> {
+            pr.money = true;
+            save(p);
+        });
+        boolean custom = !pr.money && java.util.Arrays.stream(CURRENCIES).noneMatch(m -> m == pr.currency);
         set(27, Items.icon(custom ? pr.currency : Material.STRUCTURE_VOID, "<white>Своя валюта" + (custom ? ": <yellow>" + Shop.pretty(pr.currency) : ""), List.of(
                 "<gray>Кликни по любому предмету в своём", "<gray>инвентаре — он станет валютой"), custom), null);
 
-        setClick(31, Items.icon(Material.GOLD_NUGGET, "<white>Цена: " + Shop.currencyColor(pr.currency) + Shop.currencyName(pr.currency, pr.price), List.of(
-                "", "<yellow>ЛКМ <gray>+1  <yellow>ПКМ <gray>−1", "<yellow>Shift <gray>— по 10", "<gray>0 — бесплатно"), false), (p, c) -> {
-            pr.price = Math.max(0, Math.min(10_000, pr.price + step(c, 1, 10)));
+        setClick(31, Items.icon(Material.GOLD_NUGGET, "<white>Цена: " + pr.priceColor() + pr.priceText(pr.price), List.of(
+                "", "<yellow>ЛКМ <gray>+" + (pr.money ? 50 : 1) + "  <yellow>ПКМ <gray>−" + (pr.money ? 50 : 1), "<yellow>Shift <gray>— по " + (pr.money ? 500 : 10), "<gray>0 — бесплатно"), false), (p, c) -> {
+            pr.price = Math.max(0, Math.min(1_000_000, pr.price + (pr.money ? step(c, 50, 500) : step(c, 1, 10))));
             save(p);
         });
 
@@ -73,6 +79,7 @@ final class ProductMenu extends Menu {
         Shop.Product pr = product();
         if (pr == null) return;
         pr.currency = item.getType();
+        pr.money = false;
         save(p);
     }
 

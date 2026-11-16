@@ -1,0 +1,67 @@
+# Магазин атаки в Штурме. Править удобнее в игре: /mgp shop assault_attackers
+# price: "MONEY n" — монеты счёта. Набор — items: [...] (всё за одну покупку), name и icon — как он выглядит.
+title: "<dark_gray>Арсенал атаки"
+npc-name: "<red><bold>АРСЕНАЛ АТАКИ"
+profession: weaponsmith
+categories:
+  - name: "<gold>Наборы"
+    icon: CHEST
+    items:
+      - name: "<gold>Штурмовик"
+        icon: IRON_AXE
+        items:
+          - { material: IRON_AXE, unbreakable: true }
+          - { material: IRON_HELMET, unbreakable: true }
+          - { material: IRON_CHESTPLATE, unbreakable: true }
+          - "TNT 3"
+          - "GOLDEN_APPLE"
+        price: "MONEY 900"
+      - name: "<gold>Подрывник"
+        icon: TNT
+        items:
+          - { material: STONE_SWORD, unbreakable: true }
+          - { material: CHAINMAIL_CHESTPLATE, unbreakable: true }
+          - "TNT 6"
+          - "LADDER 8"
+        price: "MONEY 800"
+      - name: "<gold>Стрелок"
+        icon: BOW
+        items:
+          - { material: BOW, enchants: { power: 2 }, unbreakable: true }
+          - "ARROW 32"
+          - "EXPLOSIVE_ARROW 4"
+          - { material: CHAINMAIL_HELMET, unbreakable: true }
+        price: "MONEY 850"
+  - name: "<red>Оружие"
+    icon: IRON_SWORD
+    items:
+      - { item: { material: IRON_SWORD, unbreakable: true }, price: "MONEY 300" }
+      - { item: { material: DIAMOND_SWORD, unbreakable: true }, price: "MONEY 800" }
+      - { item: { material: IRON_AXE, unbreakable: true }, price: "MONEY 350" }
+      - { item: { material: BOW, unbreakable: true }, price: "MONEY 250" }
+      - { item: { material: CROSSBOW, enchants: { quick_charge: 1 }, unbreakable: true }, price: "MONEY 400" }
+      - { item: "ARROW 16", price: "MONEY 50" }
+      - { item: { material: SHIELD, unbreakable: true }, price: "MONEY 200" }
+  - name: "<aqua>Броня"
+    icon: IRON_CHESTPLATE
+    items:
+      - { item: { material: CHAINMAIL_CHESTPLATE, unbreakable: true }, price: "MONEY 250" }
+      - { item: { material: IRON_HELMET, unbreakable: true }, price: "MONEY 200" }
+      - { item: { material: IRON_CHESTPLATE, unbreakable: true }, price: "MONEY 450" }
+      - { item: { material: IRON_LEGGINGS, unbreakable: true }, price: "MONEY 350" }
+      - { item: { material: IRON_BOOTS, unbreakable: true }, price: "MONEY 200" }
+      - { item: { material: DIAMOND_CHESTPLATE, unbreakable: true }, price: "MONEY 1200" }
+  - name: "<dark_red>Взрывчатка"
+    icon: TNT
+    items:
+      - { item: "TNT", price: "MONEY 150" }
+      - { item: "TNT 4", price: "MONEY 550" }
+      - { item: "EXPLOSIVE_ARROW 4", price: "MONEY 400" }
+  - name: "<light_purple>Полезное"
+    icon: GOLDEN_APPLE
+    items:
+      - { item: "GOLDEN_APPLE", price: "MONEY 150" }
+      - { item: "COOKED_BEEF 16", price: "MONEY 50" }
+      - { item: "LADDER 16", price: "MONEY 60" }
+      - { item: "COBBLESTONE 32", price: "MONEY 60" }
+      - { item: "ENDER_PEARL", price: "MONEY 300" }

@@ -71,10 +71,12 @@ public class ShopMenu extends Menu {
         List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
         if (meta.lore() != null) lore.addAll(meta.lore());
         lore.add(Msg.item(""));
-        lore.add(Msg.item("<gray>Цена: " + Shop.currencyColor(pr.currency) + Shop.currencyName(pr.currency, pr.price)));
+        lore.add(Msg.item("<gray>Цена: " + pr.priceColor() + pr.priceText(pr.price)));
         lore.add(Msg.item(""));
-        int have = p == null ? 0 : ShopService.count(p, pr.currency);
-        lore.add(Msg.item(have >= pr.price ? "<yellow>Нажми, чтобы купить!" : "<red>Не хватает " + Shop.currencyName(pr.currency, pr.price - have)));
+        int have = p == null ? 0 : service.balance(p, pr);
+        if (pr.money && have >= 0) lore.add(Msg.item("<gray>На счёте: <gold>" + Shop.moneyName(have)));
+        lore.add(Msg.item(have >= pr.price ? "<yellow>Нажми, чтобы купить!" : have < 0 ? "<red>Монеты счёта — только в игре с экономикой"
+                : "<red>Не хватает " + pr.priceText(pr.price - have)));
         meta.lore(lore);
         meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES);
         it.setItemMeta(meta);
