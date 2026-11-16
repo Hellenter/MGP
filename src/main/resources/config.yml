@@ -17,7 +17,7 @@ hub:
       - "<gray>Голодные игры: <yellow>{players_hunger_games}"
       - "<gray>Билд баттл: <yellow>{players_build_battle}"
       - "<dark_gray>────────────"
-      - "<yellow>play.myserver.ru"
+      - "<yellow>ex1.ru"
 
 # Другие серверы сети. Переход — ванильным пакетом transfer (Minecraft 1.20.5+), прокси не нужен.
 # На целевом сервере в server.properties должно быть accepts-transfers=true.
@@ -27,7 +27,7 @@ servers:
     enabled: true
     name: "<green><bold>Выживание SMP"
     icon: GRASS_BLOCK
-    host: ""                   # адрес SMP так, как его вводят в списке серверов (например play.myserver.ru)
+    host: ""                   # адрес SMP так, как его вводят в списке серверов (например ex1.ru)
     port: 25566
     hotbar-slot: 4
     description:

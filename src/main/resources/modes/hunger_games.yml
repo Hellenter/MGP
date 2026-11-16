@@ -69,9 +69,14 @@ start-items: []                    # предметы, которые получ
 loot-markers:
   IRON_INGOT: tier1
   GOLD_INGOT: tier2
+# Не больше N штук на один контейнер (суммарно по группе). Ключ — предмет, шаблон (*_INGOT)
+# или несколько через запятую ("IRON_INGOT, DIAMOND" — один общий лимит на оба).
+loot-limits:
+  "*_INGOT": 1
+  DIAMOND: 1
 loot:
   tier1:
-    rolls: 3-6                     # сколько предметов в сундуке
+    rolls: 3-5                     # сколько предметов в сундуке (было 3-6: −15%)
     items:
       # оружие и инструменты
       - { item: "WOODEN_SWORD", weight: 8 }
@@ -112,7 +117,7 @@ loot:
       - { item: "FLINT_AND_STEEL", weight: 2 }
       - { item: "EXPERIENCE_BOTTLE", weight: 2, amount: 1-2 }
   tier2:
-    rolls: 3-5
+    rolls: 2-3                     # было 3-5: −33%
     items:
       # броня
       - { item: "CHAINMAIL_HELMET", weight: 5 }
@@ -218,6 +223,7 @@ settings:
   freeze: 10                       # сек. стоим на спавнах перед стартом
   grace-period: 30                 # сек. без PvP после окончания заморозки на спавнах
   allow-place: true
+  fire-spread: false               # true — ванильный огонь (сжигает постройки карты)
   kill-levels: 2                   # уровней опыта за убийство (на зачарование; сбрасываются после игры)
   free-lapis: true                 # столы зачарования работают без лазурита
   # Что игрокам можно ломать. Имя блока (COBWEB), шаблон (*_VINES) или тег ванилы (#leaves).

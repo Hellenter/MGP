@@ -108,6 +108,7 @@ public final class ModeConfig {
 
         for (Object o : y.getList("start-items", List.of())) startItems.add(ItemSpec.parse(o));
 
+        List<LootTable.Limit> limits = lootLimits(y.getConfigurationSection("loot-limits"));
         ConfigurationSection ls = y.getConfigurationSection("loot");
         if (ls != null) for (String tier : ls.getKeys(false)) {
             ConfigurationSection t = ls.getConfigurationSection(tier);
@@ -120,7 +121,7 @@ public final class ModeConfig {
                 int[] amount = Cfg.range(m.get("amount"), spec.amount, spec.amount);
                 entries.add(new LootTable.Entry(spec, Cfg.integer(m, "weight", 1), amount[0], amount[1]));
             }
-            loot.put(tier, new LootTable(tier, rolls[0], rolls[1], entries));
+            loot.put(tier, new LootTable(tier, rolls[0], rolls[1], entries, limits));
         }
 
         ConfigurationSection ts = y.getConfigurationSection("trades");
@@ -157,6 +158,31 @@ public final class ModeConfig {
         } else {
             lootMarkers.putAll(DEFAULT_MARKERS);
         }
+    }
+
+    /**
+     * loot-limits: группа предметов -> не больше N штук на контейнер (суммарно по группе).
+     * Ключ — имя предмета (DIAMOND), шаблон со звёздочкой (*_INGOT) или несколько через запятую ("IRON_INGOT, DIAMOND").
+     */
+    private static List<LootTable.Limit> lootLimits(ConfigurationSection sec) {
+        if (sec == null) return List.of();
+        List<LootTable.Limit> out = new ArrayList<>();
+        for (String key : sec.getKeys(false)) {
+            Set<Material> mats = EnumSet.noneOf(Material.class);
+            for (String part : key.split(",")) {
+                String pat = part.trim().toUpperCase(Locale.ROOT);
+                if (pat.isEmpty()) continue;
+                if (pat.contains("*")) {
+                    java.util.regex.Pattern p = java.util.regex.Pattern.compile(pat.replace("*", ".*"));
+                    for (Material m : Material.values()) if (!m.name().startsWith("LEGACY_") && m.isItem() && p.matcher(m.name()).matches()) mats.add(m);
+                } else {
+                    Material m = Material.matchMaterial(pat);
+                    if (m != null) mats.add(m);
+                }
+            }
+            if (!mats.isEmpty()) out.add(new LootTable.Limit(mats, Math.max(0, sec.getInt(key, 1))));
+        }
+        return out;
     }
 
     /** Заполнять ли контейнеры лутом: settings.chest-loot (по умолчанию — только у голодных игр) и есть таблицы loot. */
