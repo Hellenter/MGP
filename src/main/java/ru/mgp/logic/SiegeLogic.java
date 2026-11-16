@@ -32,7 +32,11 @@ import java.util.*;
  *   • ТНТ поджигается сразу при установке и ломает всё, кроме explosion-proof. Своих ТНТ не ранит.
  *   • Молот защитников (ПКМ по стене) возвращает исходные блоки крепости рядом.
  *   • Защитник умирает один раз, атакующий возрождается через attacker-respawn сек.
- *   • Атакующие победили — все защитники мертвы; защитники — продержались до конца time-limit.
+ *   • Атакующие победили — все защитники мертвы; защитники — хоть кто-то жив к концу боя.
+ *   • Роли раздаются при старте (defender-ratio, пати — в одной команде), до старта их не видно.
+ *   • Наборы выбираются только после старта: у каждой команды свои (kits с team), одинаковых — не больше max-same-kit.
+ *   • Подготовка prep-time (зоны команд закрыты, PvP и ТНТ нет), затем бой fight-time.
+ *     За defender-glow до конца защитники светятся. Ники противников не видны, союзников — видны.
  */
 public final class SiegeLogic extends GameLogic {
     public enum Team {
@@ -55,6 +59,7 @@ public final class SiegeLogic extends GameLogic {
 
     private static final String HAMMER = "siege_hammer";
     private static final String ABILITY = "siege_ability:";
+    private static final String KIT_PICK = "siege_kit";
     private static final int MAX_FORTRESS = 600_000;
 
     // настройки
@@ -69,6 +74,8 @@ public final class SiegeLogic extends GameLogic {
     private final Material hammerItem;
     private final List<ItemSpec> defenderItems = new ArrayList<>(), attackerItems = new ArrayList<>();
     private final List<Ability> abilities = new ArrayList<>();
+    private final int prepTime, fightTime, glowTime, kitLimit, kitSelectTime;
+    private final boolean hideEnemyNames;
 
     // состояние
     private final Map<UUID, Team> teams = new HashMap<>();
@@ -83,11 +90,22 @@ public final class SiegeLogic extends GameLogic {
     private final Map<UUID, Integer> respawnAt = new HashMap<>();
     private final Map<UUID, BossBar> bars = new HashMap<>();
     private int integrityNow = 100;
+    /** Выбранные наборы и кто ещё выбирает. */
+    private final Map<UUID, String> picked = new HashMap<>();
+    private final Set<UUID> choosing = new LinkedHashSet<>();
+    private boolean glowOn;
 
     public SiegeLogic(GameSession s) {
         super(s);
         ConfigurationSection st = s.mode.settings;
-        defenderRatio = Math.max(0.05, Math.min(0.95, st.getDouble("defender-ratio", 0.4)));
+        defenderRatio = Math.max(0.05, Math.min(0.95, st.getDouble("defender-ratio", 0.75)));
+        prepTime = Math.max(0, Cfg.seconds(st.get("prep-time"), 0));
+        int ft = Cfg.seconds(st.get("fight-time"), 0);
+        fightTime = ft > 0 ? ft : s.mode.timeLimit > 0 ? s.mode.timeLimit : 900;
+        glowTime = Math.max(0, Cfg.seconds(st.get("defender-glow"), 180));
+        kitLimit = Math.max(0, st.getInt("max-same-kit", 2));
+        kitSelectTime = Math.max(5, Cfg.seconds(st.get("kit-select-time"), 60));
+        hideEnemyNames = st.getBoolean("hide-enemy-nametags", true);
         List<String> unknown = new ArrayList<>();
         breakable = Cfg.materials(st.getStringList("breakable-blocks"), unknown);
         explosionProof = Cfg.materials(st.isList("explosion-proof") ? st.getStringList("explosion-proof") : List.of("BEDROCK", "BARRIER"), unknown);
@@ -166,12 +184,13 @@ public final class SiegeLogic extends GameLogic {
         loadFortress();
         for (Player p : all) {
             Team t = team(p);
-            equip(p);
             Msg.title(p, t.color + "<bold>" + t.title.toUpperCase(Locale.ROOT),
                     t == Team.DEFENDERS ? "<gray>Удержи крепость до конца! Молот — чинить стены" : "<gray>Убей всех защитников! ТНТ ломает стены");
             p.sendMessage(Msg.parse(t.color + "Ты в команде «" + t.title + "». "
-                    + (t == Team.DEFENDERS ? "<gray>Продержитесь " + timeText(session.mode.timeLimit) + ". ПКМ молотом по стене — починка."
-                    : "<gray>Ломать руками можно только землю, доски и т.п. Стены пробивай ТНТ — его мало!")));
+                    + (t == Team.DEFENDERS ? "<gray>Хоть один защитник жив к концу боя — победа. ПКМ молотом по стене — починка."
+                    : "<gray>Убейте всех защитников за " + timeText(fightTime) + " боя. Руками ломаются только земля, доски и т.п., стены — ТНТ!")));
+            if (prepTime > 0) p.sendMessage(Msg.parse("<yellow>Подготовка " + timeText(prepTime) + ": команды разделены, драться и взрывать нельзя."));
+            giveKitOrChoice(p);
         }
         session.plugin().visibility().refreshAll(session);
     }
@@ -180,11 +199,119 @@ public final class SiegeLogic extends GameLogic {
         return sec <= 0 ? "сколько сможете" : (sec / 60) + ":" + String.format(Locale.ROOT, "%02d", sec % 60);
     }
 
+    // ------------------------------------------------------------------ наборы (только после старта)
+
+    private boolean inPrep() { return prepTime > 0 && session.elapsed() < prepTime; }
+
+    /** Наборы команды, доступные игроку. */
+    private List<ru.mgp.config.Kit> teamKits(Team t, Player p) {
+        List<ru.mgp.config.Kit> out = new ArrayList<>();
+        for (ru.mgp.config.Kit k : session.mode.kits.values())
+            if (k.team() != null && k.fits(t.id) && (k.permission() == null || p.hasPermission(k.permission()))) out.add(k);
+        if (out.isEmpty()) // у команды нет своих наборов — общие (без team) доступны обеим сторонам
+            for (ru.mgp.config.Kit k : session.mode.kits.values())
+                if (k.team() == null && (k.permission() == null || p.hasPermission(k.permission()))) out.add(k);
+        return out;
+    }
+
+    /** Сколько игроков команды t уже взяли набор kitId. */
+    private int taken(Team t, String kitId) {
+        int n = 0;
+        for (Map.Entry<UUID, String> e : picked.entrySet())
+            if (e.getValue().equals(kitId) && teams.get(e.getKey()) == t && Bukkit.getPlayer(e.getKey()) != null) n++;
+        return n;
+    }
+
+    private boolean full(Team t, ru.mgp.config.Kit k) { return kitLimit > 0 && taken(t, k.id()) >= kitLimit; }
+
+    private void giveKitOrChoice(Player p) {
+        Team t = team(p);
+        List<ru.mgp.config.Kit> ks = teamKits(t, p);
+        if (ks.size() <= 1) {
+            if (ks.size() == 1) picked.put(p.getUniqueId(), ks.get(0).id());
+            equip(p);
+            return;
+        }
+        choosing.add(p.getUniqueId());
+        p.getInventory().setItem(4, Items.tagged(Material.CHEST, "<gold><bold>Выбор набора</bold> <gray>(ПКМ)", "logic:" + KIT_PICK,
+                "<gray>Наборы своей команды.", "<gray>Одинаковых — не больше " + kitLimit + " на команду"));
+        p.getInventory().setHeldItemSlot(4);
+        Bukkit.getScheduler().runTaskLater(session.plugin(), () -> {
+            if (p.isOnline() && choosing.contains(p.getUniqueId())) new KitPickMenu(p).open(p);
+        }, 10L);
+    }
+
+    private void pick(Player p, ru.mgp.config.Kit k, boolean auto) {
+        Team t = team(p);
+        if (t == null || !choosing.contains(p.getUniqueId()) || !k.fits(t.id)) return;
+        if (!auto && full(t, k)) {
+            boolean other = false;
+            for (ru.mgp.config.Kit o : teamKits(t, p)) if (!full(t, o)) { other = true; break; }
+            if (other) {
+                p.sendActionBar(Msg.parse("<red>Этот набор уже взяли " + kitLimit + " игрока твоей команды"));
+                return;
+            }
+        }
+        choosing.remove(p.getUniqueId());
+        picked.put(p.getUniqueId(), k.id());
+        session.selectKit(p, k.id());
+        var inv = p.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) if (("logic:" + KIT_PICK).equals(Keys.tag(inv.getItem(i)))) inv.setItem(i, null);
+        if (p.getOpenInventory().getTopInventory().getHolder() instanceof KitPickMenu) p.closeInventory();
+        equip(p);
+        for (Player o : session.online())
+            if (!o.equals(p) && team(o) == t) o.sendMessage(Msg.parse(t.color + Msg.esc(p.getName()) + " <gray>взял набор " + k.display()));
+        refreshKitMenus(t);
+    }
+
+    /** Время вышло — невыбравшим даём наименее занятый набор. */
+    private void autoPick(Player p) {
+        Team t = team(p);
+        if (t == null) { choosing.remove(p.getUniqueId()); return; }
+        List<ru.mgp.config.Kit> ks = new ArrayList<>(teamKits(t, p));
+        if (ks.isEmpty()) { choosing.remove(p.getUniqueId()); equip(p); return; }
+        Collections.shuffle(ks, session.random());
+        ks.sort(Comparator.comparingInt(k -> taken(t, k.id())));
+        p.sendMessage(Msg.parse("<yellow>Время выбора вышло — тебе выдан набор " + ks.get(0).display()));
+        pick(p, ks.get(0), true);
+    }
+
+    private void refreshKitMenus(Team t) {
+        for (Player o : session.online())
+            if (team(o) == t && choosing.contains(o.getUniqueId()) && o.getOpenInventory().getTopInventory().getHolder() instanceof KitPickMenu)
+                new KitPickMenu(o).open(o);
+    }
+
+    private final class KitPickMenu extends ru.mgp.ui.Menu {
+        KitPickMenu(Player viewer) {
+            super(rowsFor(teamKits(team(viewer), viewer).size()), "<dark_gray>Набор: " + team(viewer).title);
+            Team t = team(viewer);
+            int slot = 0;
+            for (ru.mgp.config.Kit k : teamKits(t, viewer)) {
+                List<String> who = new ArrayList<>();
+                for (Map.Entry<UUID, String> e : picked.entrySet()) {
+                    Player o = Bukkit.getPlayer(e.getKey());
+                    if (o != null && teams.get(e.getKey()) == t && e.getValue().equals(k.id())) who.add(o.getName());
+                }
+                boolean isFull = full(t, k);
+                List<String> lore = new ArrayList<>(k.description());
+                lore.add("");
+                lore.add("<gray>Взяли: " + (isFull ? "<red>" : "<white>") + who.size() + (kitLimit > 0 ? "/" + kitLimit : "")
+                        + (who.isEmpty() ? "" : " <dark_gray>(" + String.join(", ", who) + ")"));
+                lore.add(isFull ? "<red>Мест нет" : "<yellow>Нажми, чтобы взять");
+                set(slot++, Items.icon(k.icon(), k.display(), lore, false), p -> {
+                    pick(p, k, false);
+                    if (choosing.contains(p.getUniqueId())) new KitPickMenu(p).open(p);
+                });
+            }
+        }
+    }
+
     private void equip(Player p) {
         Team t = team(p);
-        // кит команды (kits с team: defenders / attackers) заменяет defender-items / attacker-items
+        // выбранный набор заменяет defender-items / attacker-items (они — только если наборов нет)
         ru.mgp.config.Kit kit = session.equip(p, t == Team.DEFENDERS ? "defenders" : "attackers");
-        if (kit == null || kit.team() == null) for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
+        if (kit == null) for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
             ItemStack it = s.build();
             if (s.slot != null) applySlot(p, s.slot, it); else p.getInventory().addItem(it);
         }
@@ -291,6 +418,11 @@ public final class SiegeLogic extends GameLogic {
     public void onBlockPlace(BlockPlaceEvent e) {
         Player p = e.getPlayer();
         Block b = e.getBlockPlaced();
+        if (b.getType() == Material.TNT && inPrep()) {
+            e.setCancelled(true);
+            p.sendActionBar(Msg.parse("<red>ТНТ — только после подготовки"));
+            return;
+        }
         if (autoTnt && b.getType() == Material.TNT) {
             e.setCancelled(true);
             ItemStack hand = e.getItemInHand();
@@ -332,7 +464,7 @@ public final class SiegeLogic extends GameLogic {
         if (!(e.getEntity() instanceof Player victim)) return;
         if (respawnAt.containsKey(victim.getUniqueId())) { e.setCancelled(true); return; }
         Player a = attacker(e);
-        if (a != null && !a.equals(victim) && team(a) == team(victim)) e.setCancelled(true); // свои
+        if (a != null && !a.equals(victim) && (team(a) == team(victim) || inPrep())) e.setCancelled(true); // свои / подготовка
         if (a != null && a.equals(victim) && e.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) e.setDamage(e.getDamage() * 0.3);
     }
 
@@ -356,6 +488,7 @@ public final class SiegeLogic extends GameLogic {
         }
         // защитник (или атакующий без возрождений) выбывает; служебные предметы не выпадают
         e.getDrops().removeIf(it -> Keys.tag(it) != null);
+        p.setGlowing(false);
         session.eliminate(p);
         Msg.title(p, "<red><bold>ТЫ ВЫБЫЛ", "<gray>Теперь ты наблюдатель");
         checkWin();
@@ -385,6 +518,8 @@ public final class SiegeLogic extends GameLogic {
     @Override
     public void onLeave(Player p, boolean wasAlive) {
         respawnAt.remove(p.getUniqueId());
+        choosing.remove(p.getUniqueId());
+        p.setGlowing(false);
         BossBar bar = bars.remove(p.getUniqueId());
         if (bar != null) p.hideBossBar(bar);
         if (wasAlive) {
@@ -406,12 +541,26 @@ public final class SiegeLogic extends GameLogic {
     }
 
     @Override
-    public void onTimeUp() { win(Team.DEFENDERS, "<aqua>Защитники продержались — крепость устояла!"); }
+    public void onTimeUp() {} // время подготовки и боя считает сама осада (prep-time + fight-time), time-limit режима не нужен
+
+    @Override
+    public int teamZonesOpenAt() { return prepTime > 0 ? prepTime : -1; }
+
+    @Override
+    public boolean kitsInLobby() { return false; }
+
+    @Override
+    public boolean nametagVisible(Player viewer, Player target) {
+        if (!hideEnemyNames) return true;
+        Team a = team(viewer), b = team(target);
+        return a == null || b == null || a == b;
+    }
 
     // ------------------------------------------------------------------ молот и способности
 
     @Override
     public void onHotbar(Player p, String payload) {
+        if (payload.equals(KIT_PICK)) { if (choosing.contains(p.getUniqueId())) new KitPickMenu(p).open(p); return; }
         if (respawnAt.containsKey(p.getUniqueId())) return;
         if (payload.equals(HAMMER)) { repair(p); return; }
         if (payload.startsWith(ABILITY)) {
@@ -495,6 +644,36 @@ public final class SiegeLogic extends GameLogic {
     @Override
     public void onTick() {
         int now = session.elapsed();
+        // выбор наборов
+        if (!choosing.isEmpty()) {
+            int deadline = prepTime > 0 ? Math.min(kitSelectTime, prepTime) : kitSelectTime;
+            for (UUID u : new ArrayList<>(choosing)) {
+                Player p = Bukkit.getPlayer(u);
+                if (p == null) { choosing.remove(u); continue; }
+                if (now >= deadline) autoPick(p);
+                else p.sendActionBar(Msg.parse("<gold>Выбери набор <gray>(сундук в руке) — осталось <yellow>" + (deadline - now) + " <gray>с"));
+            }
+        }
+        // фазы: подготовка → бой → свечение защитников → конец
+        int end = prepTime + fightTime;
+        if (prepTime > 0 && now == prepTime) {
+            for (Player p : session.online()) {
+                Msg.title(p, "<red><bold>БОЙ!", "<gray>" + timeText(fightTime) + " — " + (team(p) == Team.DEFENDERS ? "продержитесь!" : "возьмите крепость!"));
+                p.playSound(p.getLocation(), Sound.EVENT_RAID_HORN, 1f, 1f);
+            }
+            session.broadcast("<red><bold>Подготовка окончена — бой!</bold> <gray>Осталось " + timeText(fightTime) + ".");
+        }
+        if (glowTime > 0 && now >= end - glowTime && now >= prepTime) {
+            if (!glowOn) {
+                glowOn = true;
+                session.broadcast("<aqua>Последние " + timeText(end - now) + " — <bold>защитники подсвечены!</bold>");
+            }
+            for (Player d : alive(Team.DEFENDERS)) if (!d.isGlowing()) d.setGlowing(true);
+        }
+        if (now >= end && session.isPlaying()) {
+            win(Team.DEFENDERS, "<aqua>Защитники продержались — крепость устояла!");
+            return;
+        }
         for (Map.Entry<UUID, Integer> e : new ArrayList<>(respawnAt.entrySet())) {
             Player p = Bukkit.getPlayer(e.getKey());
             if (p == null) { respawnAt.remove(e.getKey()); continue; }
@@ -531,6 +710,10 @@ public final class SiegeLogic extends GameLogic {
     public void placeholders(Player p, Map<String, String> ph) {
         Team t = team(p);
         ph.put("team", t == null ? "<gray>-" : t.color + t.title);
+        int now = session.elapsed();
+        boolean prep = inPrep();
+        ph.put("phase", prep ? "До боя" : "До конца");
+        ph.put("time", Msg.time(Math.max(0, prep ? prepTime - now : prepTime + fightTime - now)));
         ph.put("defenders", String.valueOf(alive(Team.DEFENDERS).size()));
         ph.put("attackers", String.valueOf(alive(Team.ATTACKERS).size()));
         ph.put("integrity", original.isEmpty() ? "-" : integrityNow + "%");
@@ -550,6 +733,8 @@ public final class SiegeLogic extends GameLogic {
 
     @Override
     public void onEnd() {
+        for (Player p : session.online()) p.setGlowing(false);
+        choosing.clear();
         for (UUID u : new ArrayList<>(bars.keySet())) {
             Player p = Bukkit.getPlayer(u);
             BossBar bar = bars.remove(u);

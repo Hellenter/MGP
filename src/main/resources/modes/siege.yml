@@ -1,7 +1,10 @@
 # ===================== ОСАДА (Siege) =====================
 # Две команды. Защитники держат крепость и чинят её молотом, атакующие (больше ресурсов, способности)
 # должны убить всех защитников. Руками атакующие ломают только непрочные блоки (breakable-blocks),
-# стены крепости — только ТНТ, а его мало. Защитники продержались до конца времени — их победа.
+# стены крепости — только ТНТ, а его мало. Хоть один защитник жив к концу боя — победа защиты.
+# Роли (2 атаки : 6 защиты при 8 игроках) раздаются только при старте, пати — всегда за одну сторону.
+# Наборы выбираются после старта, у каждой команды свои, одинаковых — не больше max-same-kit на команду.
+# Сначала подготовка (prep-time: команды разделены, драться и взрывать нельзя), потом бой (fight-time).
 #
 # Карта: крепость — /mgp setup fortress <карта> (из выделения pos1/pos2, можно несколько областей),
 #        спавны — /mgp setup teamspawn <карта> defenders | attackers
@@ -13,12 +16,12 @@ description:
   - "<gray>до конца — или возьми её штурмом!"
 
 min-players: 4
-max-players: 16
+max-players: 8
 max-sessions: 2
 countdown: 45
 fast-countdown: 10
 end-delay: 10
-time-limit: "10:00"
+time-limit: 0                    # не используется: время задают settings.prep-time и fight-time
 
 map-vote:
   type: MOST_VOTES
@@ -34,16 +37,92 @@ gamerules:
 default-kit: ""
 # Наборы. Быстрее всего — собрать инвентарь (броню надеть) и ввести /mgp kit save siege <id> <defenders|attackers> [название]:
 # сохранятся все слоты, броня и вторая рука, предметы целиком (зачарования, имена). Набор с team заменяет
-# defender-items / attacker-items этой команды; если наборов у команды несколько — выбор в лобби, иначе первый.
-# Вручную: kits: { attack: { display: "<red>Штурм", icon: TNT, team: attackers,
-#                   items: ["IRON_SWORD", { material: IRON_HELMET, slot: head }, { material: TNT, amount: 8, slot: 2 }] } }
-kits: {}
+# defender-items / attacker-items этой команды. Выбор — после старта игры (до старта роли неизвестны):
+# если у команды 2+ набора, каждому открывается меню, за kit-select-time сек. не выбрал — дадут наименее занятый.
+# Одинаковых наборов в команде — не больше max-same-kit. Наборы без team доступны обеим командам, если у команды нет своих.
+# Молот и способности выдаются к любому набору.
+kits:
+  swordsman:
+    display: "<aqua>Мечник"
+    icon: IRON_SWORD
+    team: defenders
+    description: ["<gray>Ближний бой: меч и щит"]
+    items:
+      - "IRON_SWORD"
+      - { material: SHIELD, slot: offhand }
+      - { material: IRON_HELMET, slot: head }
+      - { material: IRON_LEGGINGS, slot: legs }
+      - "COOKED_BEEF 16"
+      - "OAK_PLANKS 16"
+  archer:
+    display: "<aqua>Лучник"
+    icon: BOW
+    team: defenders
+    description: ["<gray>Стрельба со стен"]
+    items:
+      - "STONE_SWORD"
+      - { material: BOW, enchants: { power: 1 } }
+      - "ARROW 48"
+      - { material: IRON_HELMET, slot: head }
+      - "COOKED_BEEF 16"
+      - "OAK_PLANKS 16"
+  engineer:
+    display: "<aqua>Инженер"
+    icon: BRUSH
+    team: defenders
+    description: ["<gray>Много досок и лестниц,", "<gray>заделывает проломы"]
+    items:
+      - "STONE_SWORD"
+      - { material: IRON_HELMET, slot: head }
+      - "OAK_PLANKS 64"
+      - "OAK_PLANKS 64"
+      - "LADDER 16"
+      - "COOKED_BEEF 16"
+  stormtrooper:
+    display: "<red>Штурмовик"
+    icon: IRON_AXE
+    team: attackers
+    description: ["<gray>Крепкая броня и топор"]
+    items:
+      - "IRON_AXE"
+      - { material: IRON_HELMET, slot: head }
+      - { material: IRON_LEGGINGS, slot: legs }
+      - { material: IRON_BOOTS, slot: feet }
+      - "TNT 4"
+      - "LADDER 16"
+      - "COBBLESTONE 32"
+      - "COOKED_BEEF 16"
+  sapper:
+    display: "<red>Подрывник"
+    icon: TNT
+    team: attackers
+    description: ["<gray>Больше всего ТНТ"]
+    items:
+      - "STONE_SWORD"
+      - { material: IRON_HELMET, slot: head }
+      - "TNT 10"
+      - "LADDER 16"
+      - "COBBLESTONE 32"
+      - "COOKED_BEEF 16"
+  crossbowman:
+    display: "<red>Арбалетчик"
+    icon: CROSSBOW
+    team: attackers
+    description: ["<gray>Стрельба издалека"]
+    items:
+      - "STONE_SWORD"
+      - { material: CROSSBOW, enchants: { quick_charge: 1 } }
+      - "ARROW 48"
+      - { material: IRON_HELMET, slot: head }
+      - "TNT 3"
+      - "LADDER 16"
+      - "COOKED_BEEF 16"
 start-items: []
 
 win-actions:
   - "message: <gold>Победа в осаде!"
 
-# Плейсхолдеры режима: {team} {defenders} {attackers} {integrity} {respawn}
+# Плейсхолдеры режима: {team} {defenders} {attackers} {integrity} {respawn} {phase} (До боя / До конца), {time} — сколько осталось фазы
 sidebar:
   title: "<red><bold>ОСАДА"
   waiting:
@@ -55,7 +134,7 @@ sidebar:
   playing:
     - "<dark_gray>────────────"
     - "<gray>Ты: {team}"
-    - "<gray>До конца: <yellow>{time}"
+    - "<gray>{phase}: <yellow>{time}"
     - ""
     - "<aqua>Защитники: <white>{defenders}"
     - "<red>Атакующие: <white>{attackers}"
@@ -70,9 +149,13 @@ sidebar:
 
 settings:
   empty-chests: true             # лута в осаде нет: сундуки, бочки и шалкеры карты пустые (false — оставить как на карте)
-  defender-ratio: 0.4            # доля защитников (пати остаются в одной команде)
-  team-zones-open: 60            # через сколько сек. снимается граница между стартовыми зонами команд
-                                 # (карта: /mgp setup teamzone <карта> attackers|defenders; 0 — только действием zones: open)
+  defender-ratio: 0.75           # доля защитников: при 8 игроках 6 защиты и 2 атаки (пати остаются в одной команде)
+  prep-time: "30:00"             # подготовка: граница между зонами команд закрыта (/mgp setup teamzone), PvP и ТНТ нет
+  fight-time: "15:00"            # бой: хоть один защитник жив к концу — победа защиты
+  defender-glow: "3:00"          # за сколько до конца боя защитники начинают светиться (0 — никогда)
+  hide-enemy-nametags: true      # ники противников не видны, союзников — видны
+  max-same-kit: 2                # одинаковых наборов в одной команде (0 — без ограничения)
+  kit-select-time: 60            # сек. на выбор набора после старта, потом выдаётся наименее занятый
   attacker-respawn: 5            # через сколько сек. возрождается атакующий (-1 — не возрождается)
   attacker-keep-inventory: true  # атакующий не теряет вещи при смерти (новый ТНТ не выдаётся!)
   tnt-auto-ignite: true          # ТНТ поджигается сразу при установке

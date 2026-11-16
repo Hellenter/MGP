@@ -45,7 +45,8 @@ public final class PlayZone {
         teamOpen = false;
         MapConfig m = map();
         if (m == null) return;
-        int t = m.teamZonesOpen >= 0 ? m.teamZonesOpen : s.mode.settings.getInt("team-zones-open", 0);
+        int lt = s.logic().teamZonesOpenAt();
+        int t = lt >= 0 ? lt : m.teamZonesOpen >= 0 ? m.teamZonesOpen : s.mode.settings.getInt("team-zones-open", 0);
         openAt = Math.max(0, t);
         if (!m.teamZones.isEmpty() && openAt > 0)
             s.broadcast("<gray>Команды пока разделены — граница откроется через <yellow>" + Msg.time(openAt));

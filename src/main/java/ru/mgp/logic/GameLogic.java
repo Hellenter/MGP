@@ -64,6 +64,15 @@ public abstract class GameLogic {
     /** Удар игрока по сущности (до проверок ванили) — например, по хитбоксу маскировки. */
     public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {}
 
+    /** Видит ли viewer ник target над головой (осада: ники противников скрыты). */
+    public boolean nametagVisible(Player viewer, Player target) { return true; }
+
+    /** Через сколько секунд после старта снять зоны команд (-1 — как в карте/режиме, team-zones-open). */
+    public int teamZonesOpenAt() { return -1; }
+
+    /** Можно ли выбирать набор в лобби ожидания (false — режим сам выдаёт выбор после старта). */
+    public boolean kitsInLobby() { return true; }
+
     /** Дополнительное правило видимости между игроками одной идущей игры. */
     public boolean canSee(Player viewer, Player target) { return true; }
 
