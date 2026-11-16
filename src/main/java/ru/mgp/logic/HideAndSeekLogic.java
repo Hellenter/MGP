@@ -3,6 +3,9 @@ package ru.mgp.logic;
 import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import net.kyori.adventure.key.Key;
 import org.bukkit.*;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.configuration.ConfigurationSection;
@@ -36,14 +39,24 @@ import java.util.*;
 public final class HideAndSeekLogic extends GameLogic {
     private enum Role { HIDER, SEEKER }
 
-    /** Таунт прячущегося или провокация ищущего из settings.taunts / settings.provocations. */
+    /**
+     * Таунт прячущегося или провокация ищущего из settings.taunts / settings.provocations.
+     * target: all | nearest (только ближайший к ищущему прячущийся); max-hiders / max-time-left — условия
+     * доступности провокации (прячущихся осталось не больше N; до конца игры не больше N сек.), 0 — без условия.
+     */
     private record Effect(String id, String display, Material icon, String sound, float volume, float pitch,
-                          String particle, int cooldown, int points, String type, int duration, List<String> lore) {}
+                          String particle, int cooldown, int points, String type, int duration, List<String> lore,
+                          String target, int maxHiders, int maxTimeLeft) {}
+
+    private static final NamespacedKey SPEED_KEY = new NamespacedKey("mgp", "seeker_speed");
 
     private final boolean prop;
     private final int hideTime;
     private final boolean caughtBecomeSeeker;
-    private final boolean oneHit;
+    private final int hitsToKill;
+    private final double seekerSpeed;
+    private final boolean provocationItems;
+    private final String weaponName;
     private final double missPenalty;
     private final int autoTaunt;
     private final Set<Material> disguiseAllowed = EnumSet.noneOf(Material.class);
@@ -68,10 +81,16 @@ public final class HideAndSeekLogic extends GameLogic {
         prop = "prophunt".equalsIgnoreCase(st.getString("variant", "classic")) || "prop_hunt".equalsIgnoreCase(st.getString("variant", ""));
         hideTime = Math.max(0, st.getInt("hide-time", 45));
         caughtBecomeSeeker = !"spectator".equalsIgnoreCase(st.getString("caught", "seeker"));
-        oneHit = st.getBoolean("one-hit", !prop);
+        // hits-to-kill: сколько полных ударов ловит прячущегося (0 — по урону оружия); старый one-hit: true = 1
+        int htk = st.getInt("hits-to-kill", prop ? 0 : 3);
+        if (!st.contains("hits-to-kill") && st.getBoolean("one-hit", false)) htk = 1;
+        hitsToKill = Math.max(0, htk);
+        seekerSpeed = st.getDouble("seeker-speed", prop ? 0 : 5);
+        provocationItems = st.getBoolean("provocation-items", true);
+        weaponName = st.getString("seeker-weapon-name", prop ? "<red><bold>Оружие ищущего" : "<red><bold>Нож");
         missPenalty = st.getDouble("miss-penalty", prop ? 1.0 : 0.0);
         autoTaunt = Math.max(0, st.getInt("auto-taunt", 60));
-        seekerWeapon = Cfg.material(st.getString("seeker-weapon", prop ? "IRON_SWORD" : "STICK"), Material.STICK);
+        seekerWeapon = Cfg.material(st.getString("seeker-weapon", "IRON_SWORD"), Material.IRON_SWORD);
         List<String> unknown = new ArrayList<>();
         disguiseAllowed.addAll(Cfg.materials(st.getStringList("disguise-blocks"), unknown));
         if (!unknown.isEmpty()) s.plugin().getLogger().warning("disguise-blocks в " + s.mode.id + ": не распознано " + unknown);
@@ -88,7 +107,8 @@ public final class HideAndSeekLogic extends GameLogic {
             out.add(new Effect(id, Cfg.str(m, "display", id), Cfg.material(Cfg.str(m, "icon", "NOTE_BLOCK"), Material.NOTE_BLOCK),
                     Cfg.str(m, "sound", null), (float) Cfg.dbl(m, "volume", 2.0), (float) Cfg.dbl(m, "pitch", 1.0),
                     Cfg.str(m, "particle", null), Cfg.integer(m, "cooldown", 15), Cfg.integer(m, "points", 1),
-                    Cfg.str(m, "type", defType).toLowerCase(Locale.ROOT), Cfg.integer(m, "duration", 3), Cfg.strings(m.get("lore"))));
+                    Cfg.str(m, "type", defType).toLowerCase(Locale.ROOT), Cfg.integer(m, "duration", 3), Cfg.strings(m.get("lore")),
+                    Cfg.str(m, "target", "all").toLowerCase(Locale.ROOT), Cfg.integer(m, "max-hiders", 0), Cfg.integer(m, "max-time-left", 0)));
         }
     }
 
@@ -156,10 +176,36 @@ public final class HideAndSeekLogic extends GameLogic {
     private void giveSeeker(Player p) {
         var inv = p.getInventory();
         inv.clear();
-        inv.setItem(0, Items.icon(seekerWeapon, "<red><bold>Оружие ищущего", List.of(oneHit ? "<gray>Один удар — и прячущийся пойман" : "<gray>Бей прячущихся"), false));
-        if (!provocations.isEmpty()) inv.setItem(8, Items.tagged(Material.GOAT_HORN, "<gold><bold>Провокации</bold> <gray>(ПКМ)", "logic:provoke",
-                "<gray>Заставь прячущихся выдать себя"));
+        inv.setItem(0, Items.icon(seekerWeapon, weaponName, List.of(hitsToKill == 1 ? "<gray>Один удар — и прячущийся пойман"
+                : hitsToKill > 1 ? "<gray>Ловит с " + hitsToKill + " ударов" : "<gray>Бей прячущихся"), false));
+        if (provocationItems) {
+            int slot = 1; // каждая провокация — свой предмет, перезарядка видна на самом предмете
+            for (Effect ef : provocations) {
+                if (slot > 8) break;
+                inv.setItem(slot++, Keys.tag(Items.icon(ef.icon(), ef.display() + " <gray>(ПКМ)", provokeLore(ef, -1), false), "logic:provoke:" + ef.id()));
+            }
+        } else if (!provocations.isEmpty()) {
+            inv.setItem(8, Items.tagged(Material.GOAT_HORN, "<gold><bold>Провокации</bold> <gray>(ПКМ)", "logic:provoke",
+                    "<gray>Заставь прячущихся выдать себя"));
+        }
         inv.setHeldItemSlot(0);
+        AttributeInstance ms = p.getAttribute(Attribute.MOVEMENT_SPEED);
+        if (ms != null) {
+            ms.removeModifier(SPEED_KEY);
+            if (seekerSpeed != 0) ms.addModifier(new AttributeModifier(SPEED_KEY, seekerSpeed / 100.0, AttributeModifier.Operation.MULTIPLY_SCALAR_1));
+        }
+    }
+
+    /** Описание провокации: что делает, условия, перезарядка (left — оставшиеся секунды, -1 — не показывать). */
+    private List<String> provokeLore(Effect ef, long left) {
+        List<String> lore = new ArrayList<>(ef.lore());
+        if (!lore.isEmpty()) lore.add("");
+        if ("nearest".equals(ef.target())) lore.add("<gray>Действует на ближайшего прячущегося");
+        if (ef.maxHiders() > 0) lore.add("<gray>Когда прячущихся " + ef.maxHiders() + " или меньше");
+        if (ef.maxTimeLeft() > 0) lore.add("<gray>За " + Msg.time(ef.maxTimeLeft()) + " до конца и позже");
+        lore.add("<gray>Перезарядка: " + ef.cooldown() + " сек.");
+        if (left >= 0) lore.add(left > 0 ? "<red>Ещё " + left + " сек." : "<green>▶ Нажми");
+        return lore;
     }
 
     private void giveHider(Player p) {
@@ -336,17 +382,26 @@ public final class HideAndSeekLogic extends GameLogic {
             if (!en.getValue().equals(hb)) continue;
             Player hider = Bukkit.getPlayer(en.getKey());
             if (hider == null || !isHider(hider)) return;
-            hit(seeker, hider, damageOf(seeker));
+            hit(seeker, hider, strengthOf(seeker));
             return;
         }
     }
 
-    private double damageOf(Player seeker) {
-        var a = seeker.getAttribute(org.bukkit.attribute.Attribute.ATTACK_DAMAGE);
-        double base = a != null ? Math.max(1.0, a.getValue()) : 1.0;
-        float cd = seeker.getAttackCooldown(); // как в ванили: спам кликами почти не наносит урона
+    /** Сила удара 0.2..1 по заряду атаки, как в ванили: спам кликами почти не наносит урона. */
+    private static double strengthOf(Player seeker) {
+        float cd = seeker.getAttackCooldown();
         seeker.resetCooldown();
-        return base * (0.2 + 0.8 * cd * cd);
+        return 0.2 + 0.8 * cd * cd;
+    }
+
+    private static double attackDamage(Player seeker) {
+        AttributeInstance a = seeker.getAttribute(Attribute.ATTACK_DAMAGE);
+        return a != null ? Math.max(1.0, a.getValue()) : 1.0;
+    }
+
+    private static double maxHealth(Player p) {
+        AttributeInstance a = p.getAttribute(Attribute.MAX_HEALTH);
+        return a != null ? a.getValue() : 20.0;
     }
 
     // ------------------------------------------------------------------ урон и поимка
@@ -363,15 +418,24 @@ public final class HideAndSeekLogic extends GameLogic {
             return;
         }
         if (hideLeft > 0 || !isSeeker(attacker) || !isHider(victim)) return;
-        hit(attacker, victim, e.getDamage());
+        if (e.getCause() == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) return; // взмах мечом по соседям не в счёт
+        // заряд атаки к этому моменту уже сброшен — силу удара берём из ванильного урона
+        hit(attacker, victim, Math.min(1.0, e.getDamage() / attackDamage(attacker)));
     }
 
-    private void hit(Player seeker, Player hider, double dmg) {
+    private void hit(Player seeker, Player hider, double strength) {
+        double dmg;
+        if (hitsToKill > 0) {
+            if (strength >= 0.9) strength = 1.0; // почти полный заряд считаем полным, иначе «3 удара» превращаются в 4
+            dmg = maxHealth(hider) / hitsToKill * strength;
+        } else {
+            dmg = attackDamage(seeker) * strength;
+        }
         World w = hider.getWorld();
         Location at = prop && displays.containsKey(hider.getUniqueId()) ? displays.get(hider.getUniqueId()).getLocation().add(0.5, 0.5, 0.5) : hider.getLocation().add(0, 1, 0);
         w.playSound(at, Sound.ENTITY_PLAYER_HURT, 1f, 1f);
         w.spawnParticle(Particle.DAMAGE_INDICATOR, at, 4, 0.2, 0.2, 0.2, 0.1);
-        if (oneHit || hider.getHealth() - dmg <= 0) { caught(hider, seeker); return; }
+        if (hitsToKill == 1 || hider.getHealth() - dmg <= 0.05) { caught(hider, seeker); return; }
         hider.setHealth(hider.getHealth() - dmg);
         hider.playHurtAnimation(0);
         seeker.sendActionBar(Msg.parse("<red>Попал! <gray>Осталось " + String.format(Locale.ROOT, "%.1f", hider.getHealth() / 2) + "❤"));
@@ -464,7 +528,11 @@ public final class HideAndSeekLogic extends GameLogic {
             }
             case "taunt" -> { if (isHider(p)) openMenu(p, taunts, true); }
             case "provoke" -> { if (isSeeker(p)) openMenu(p, provocations, false); }
-            default -> {}
+            default -> {
+                if (!payload.startsWith("provoke:") || !isSeeker(p)) return;
+                String id = payload.substring(8);
+                for (Effect ef : provocations) if (ef.id().equals(id)) { provoke(p, ef); return; }
+            }
         }
     }
 
@@ -474,11 +542,16 @@ public final class HideAndSeekLogic extends GameLogic {
                 int slot = 0;
                 for (Effect ef : list) {
                     long left = cooldownLeft(p, ef);
-                    List<String> lore = new ArrayList<>(ef.lore());
-                    lore.add("");
-                    if (taunt) lore.add("<light_purple>+" + ef.points() + " очк.");
-                    lore.add("<gray>Перезарядка: " + ef.cooldown() + " сек.");
-                    lore.add(left > 0 ? "<red>Ещё " + left + " сек." : "<green>▶ Нажми");
+                    List<String> lore;
+                    if (taunt) {
+                        lore = new ArrayList<>(ef.lore());
+                        lore.add("");
+                        lore.add("<light_purple>+" + ef.points() + " очк.");
+                        lore.add("<gray>Перезарядка: " + ef.cooldown() + " сек.");
+                        lore.add(left > 0 ? "<red>Ещё " + left + " сек." : "<green>▶ Нажми");
+                    } else {
+                        lore = provokeLore(ef, left);
+                    }
                     set(slot++, Items.icon(left > 0 ? Material.GRAY_DYE : ef.icon(), ef.display(), lore, false), pl -> {
                         pl.closeInventory();
                         if (taunt) taunt(pl, ef); else provoke(pl, ef);
@@ -541,36 +614,65 @@ public final class HideAndSeekLogic extends GameLogic {
         });
     }
 
-    /** Провокация ищущего: всех прячущихся заставляем выдать себя (type: sound | glow | firework | particles). */
+    /**
+     * Провокация ищущего: прячущиеся (все или ближайший — target) выдают себя (type: sound | glow | firework | particles).
+     * Возвращает причину, по которой сейчас нельзя, или null.
+     */
+    private String provokeBlocked(Effect ef) {
+        if (hideLeft > 0) return "Подожди, пока все спрячутся";
+        int hiders = count(Role.HIDER);
+        if (ef.maxHiders() > 0 && hiders > ef.maxHiders())
+            return "Можно, когда прячущихся " + ef.maxHiders() + " или меньше (сейчас " + hiders + ")";
+        int timeLeft = session.mode.timeLimit > 0 ? session.mode.timeLimit - session.elapsed() : -1;
+        if (ef.maxTimeLeft() > 0 && timeLeft > ef.maxTimeLeft())
+            return "Можно за " + Msg.time(ef.maxTimeLeft()) + " до конца (ещё " + Msg.time(timeLeft - ef.maxTimeLeft()) + ")";
+        return null;
+    }
+
     private void provoke(Player seeker, Effect ef) {
         if (!session.isPlaying() || !isSeeker(seeker)) return;
-        if (hideLeft > 0) { seeker.sendActionBar(Msg.parse("<red>Подожди, пока все спрячутся")); return; }
-        if (!useCooldown(seeker, ef)) return;
+        String blocked = provokeBlocked(ef);
+        if (blocked != null) { seeker.sendActionBar(Msg.parse("<red>" + blocked)); return; }
         List<Player> hs = new ArrayList<>();
         for (Player p : session.alivePlayers()) if (isHider(p)) hs.add(p);
-        switch (ef.type()) {
-            case "glow" -> {
-                for (Player h : hs) setGlow(h, true);
-                Bukkit.getScheduler().runTaskLater(session.plugin(), () -> { for (Player h : hs) setGlow(h, false); }, ef.duration() * 20L);
+        if ("nearest".equals(ef.target())) {
+            Player best = null;
+            double bd = Double.MAX_VALUE;
+            for (Player h : hs) {
+                if (!h.getWorld().equals(seeker.getWorld())) continue;
+                double d = h.getLocation().distanceSquared(seeker.getLocation());
+                if (d < bd) { bd = d; best = h; }
             }
+            hs = best == null ? List.of() : List.of(best);
+        }
+        if (hs.isEmpty()) { seeker.sendActionBar(Msg.parse("<red>Рядом никого нет")); return; }
+        if (!useCooldown(seeker, ef)) return;
+        seeker.setCooldown(ef.icon(), ef.cooldown() * 20); // полоска перезарядки на предмете
+        final List<Player> targets = hs;
+        switch (ef.type()) {
+            case "glow" -> { for (Player h : targets) glow(h, ef.duration()); }
             case "particles" -> {
                 int[] left = {ef.duration()};
                 Bukkit.getScheduler().runTaskTimer(session.plugin(), t -> {
                     if (left[0]-- <= 0 || !session.isPlaying()) { t.cancel(); return; }
-                    for (Player h : hs) if (isHider(h)) emit(h, new Effect(ef.id(), "", Material.AIR, null, 1, 1, ef.particle() != null ? ef.particle() : "HAPPY_VILLAGER", 0, 0, "particles", 0, List.of()));
+                    for (Player h : targets) if (isHider(h)) emit(h, new Effect(ef.id(), "", Material.AIR, null, 1, 1, ef.particle() != null ? ef.particle() : "HAPPY_VILLAGER", 0, 0, "particles", 0, List.of(), "all", 0, 0));
                 }, 0L, 20L);
             }
-            default -> { for (Player h : hs) emit(h, ef); }
+            default -> { for (Player h : targets) emit(h, ef); }
         }
-        for (Player h : hs) h.sendActionBar(Msg.parse("<red>Ищущий использовал «" + ef.display() + "<red>» — ты выдал себя!"));
+        for (Player h : targets) h.sendActionBar(Msg.parse("<red>Ищущий использовал «" + ef.display() + "<red>» — ты выдал себя!"));
         session.broadcast("<gold>" + Msg.esc(seeker.getName()) + " <gray>использовал провокацию «" + ef.display() + "<gray>»");
     }
 
-    private void setGlow(Player h, boolean on) {
-        if (!session.isPlaying()) on = false;
+    /** Подсветка сквозь стены на sec секунд: игроку — эффект «Свечение», в prop hunt — его блоку. */
+    private void glow(Player h, int sec) {
         BlockDisplay d = displays.get(h.getUniqueId());
-        if (d != null && d.isValid()) d.setGlowing(on);
-        else if (h.isOnline()) h.setGlowing(on);
+        if (d != null && d.isValid()) {
+            d.setGlowing(true);
+            Bukkit.getScheduler().runTaskLater(session.plugin(), () -> { if (d.isValid()) d.setGlowing(false); }, sec * 20L);
+        } else {
+            h.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, sec * 20, 0, false, false));
+        }
     }
 
     /** Автоматический звук (auto-taunt) — случайный таунт без очков и без перезарядки. */

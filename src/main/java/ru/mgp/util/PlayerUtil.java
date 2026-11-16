@@ -3,6 +3,7 @@ package ru.mgp.util;
 import org.bukkit.GameMode;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 
@@ -27,6 +28,9 @@ public final class PlayerUtil {
         p.setGameMode(mode);
         AttributeInstance max = p.getAttribute(Attribute.MAX_HEALTH);
         if (max != null) max.setBaseValue(20.0); // сброс max-health из модификаторов режима
+        AttributeInstance speed = p.getAttribute(Attribute.MOVEMENT_SPEED); // ускорение ищущего и т.п.
+        if (speed != null) for (AttributeModifier m : new java.util.ArrayList<>(speed.getModifiers()))
+            if ("mgp".equals(m.getKey().getNamespace())) speed.removeModifier(m);
         p.setHealth(max != null ? max.getValue() : 20.0);
         p.setFoodLevel(20);
         p.setSaturation(5f);
