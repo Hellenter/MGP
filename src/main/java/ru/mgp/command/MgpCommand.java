@@ -30,7 +30,10 @@ public final class MgpCommand implements TabExecutor {
     public MgpCommand(MGPPlugin plugin) {
         this.plugin = plugin;
         this.display = new SelectionDisplay(plugin, pos1, pos2, posWorld);
+        this.selOps = new SelectionOps(pos1, pos2, posWorld, display::update);
     }
+
+    private final SelectionOps selOps;
 
     private final SelectionDisplay display;
 
@@ -226,6 +229,8 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
                     "<yellow>/mgp setup trader <карта> <набор сделок> [профессия]",
                     "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
+                    "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
+                    "<yellow>/mgp setup sel</yellow> — меню граней выделения; <yellow>face <грань> <коорд.|+n|-n|here></yellow>, <yellow>box x1 y1 z1 x2 y2 z2</yellow>",
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
                     "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
                     "<yellow>/mgp setup rename <карта> <новый id> [название]</yellow> — переименовать карту",
@@ -313,6 +318,8 @@ public final class MgpCommand implements TabExecutor {
                     addMap(y, "traders", m);
                 }, "Торговец добавлен");
                 case "pos1", "pos2" -> setPos(p, sub.equals("pos1"), Pos.ofBlock(loc));
+                case "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "selection", "faces" ->
+                        selOps.handle(p, Arrays.copyOfRange(a, 1, a.length));
                 case "clearsel" -> {
                     pos1.remove(p.getUniqueId()); pos2.remove(p.getUniqueId()); posWorld.remove(p.getUniqueId());
                     display.remove(p.getUniqueId());
@@ -813,7 +820,14 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+            } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
+                String sub = a[1].toLowerCase(Locale.ROOT);
+                if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
+                else if (sub.equals("box")) { if (a.length <= 8) out.add("~"); }
+                else if (sub.equals("outset") || sub.equals("inset")) out.addAll(a.length == 3 ? List.of("1", "5", "10") : a.length == 4 ? List.of("-h", "-v") : List.of());
+                else if (a.length == 3) out.addAll(sub.equals("expand") ? List.of("1", "5", "10", "vert") : List.of("1", "5", "10"));
+                else if (a.length <= 5) out.addAll(SelectionOps.DIRECTIONS);
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 if (a[1].equalsIgnoreCase("lobby")) out.add("default");
