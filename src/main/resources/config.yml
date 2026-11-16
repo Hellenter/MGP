@@ -60,6 +60,7 @@ default-lobby:
   template: waiting_lobby
   spawn: ""
   void-y: 0
+  time: 6000                   # время суток в лобби ожидания (не идёт); -1 — не трогать. time: в режиме важнее
 
 # Миры игр и лобби ожидания
 worlds:

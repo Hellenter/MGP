@@ -239,6 +239,12 @@ public final class WorldService {
 
     public void setShuttingDown() { shuttingDown = true; }
 
+    /** Время суток стоит на месте (6000 — полдень). */
+    public void fixTime(World w, long time) {
+        w.setTime(time);
+        applyGamerules(w, Map.of(daylightRule(), "false"));
+    }
+
     /** Id геймрула смены дня и ночи: в новых версиях advance_time, раньше do_daylight_cycle. */
     public static String daylightRule() {
         var reg = io.papermc.paper.registry.RegistryAccess.registryAccess().getRegistry(io.papermc.paper.registry.RegistryKey.GAME_RULE);
