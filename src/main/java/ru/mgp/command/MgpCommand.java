@@ -115,6 +115,11 @@ public final class MgpCommand implements TabExecutor {
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
                 try { KitCommands.handle(plugin, p, a); } catch (IllegalArgumentException e) { Msg.send(p, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
             }
+            case "npc", "npcs" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                ru.mgp.npc.NpcCommands.handle(plugin, p, a);
+            }
             case "wand" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -158,7 +163,8 @@ public final class MgpCommand implements TabExecutor {
         String modeId = a.length > 1 ? a[1] : "hunger_games";
         ModeConfig m = plugin.registry().mode(modeId);
         if (m == null) { Msg.send(s, "<red>Нет режима " + Msg.esc(modeId)); return; }
-        Msg.send(s, "<gold>Таблицы лута " + m.id + ": <white>" + m.loot.keySet());
+        Msg.send(s, "<gold>Таблицы лута " + m.id + ": <white>" + m.loot.keySet() + "</white>, лут в сундуках: "
+                + (m.chestLoot() ? "<green>да" : "<red>нет") + "<gold>, маркеры: <white>" + m.lootMarkers);
         List<String> unknown = new ArrayList<>();
         Set<org.bukkit.Material> br = ru.mgp.util.Cfg.materials(m.settings.getStringList("breakable-blocks"), unknown);
         StringBuilder sample = new StringBuilder();
@@ -177,11 +183,12 @@ public final class MgpCommand implements TabExecutor {
                     var dim = ru.mgp.world.RegionCutter.findOverworldDir(plugin.worlds().templatesDir().resolve(map.template));
                     Map<String, String> tiers = ru.mgp.util.Cfg.chestTiers(plugin.getConfig());
                     Map<String, Integer> byTier = new TreeMap<>();
-                    for (var f : ru.mgp.world.ChestScanner.scan(dim, r.minX(), r.minZ(), r.maxX(), r.maxZ())) {
-                        String t = tiers.get(f.type());
-                        if (t != null) byTier.merge(t + (m.loot.containsKey(t) ? "" : "(нет таблицы!)"), 1, Integer::sum);
-                    }
-                    Msg.send(s, "<gold>Сундуки в шаблоне " + map.template + ": <white>" + byTier + "</white>, в списке карты: " + map.chests.size());
+                    var found = ru.mgp.world.ChestScanner.scan(dim, r.minX(), r.minZ(), r.maxX(), r.maxZ());
+                    var marked = ru.mgp.world.ChestScanner.marked(found, m.lootMarkers);
+                    for (var t : ru.mgp.world.ChestScanner.tiers(found, m.lootMarkers, tiers))
+                        byTier.merge(t.tier() + (m.loot.containsKey(t.tier()) ? "" : "(нет таблицы!)"), 1, Integer::sum);
+                    Msg.send(s, "<gold>Сундуки в шаблоне " + map.template + (marked.isEmpty() ? " (по типу блока)" : " (по маркерам)")
+                            + ": <white>" + byTier + "</white>, в списке карты: " + map.chests.size());
                 } catch (Exception ex) {
                     Msg.send(s, "<red>Ошибка чтения шаблона: " + Msg.esc(String.valueOf(ex.getMessage())));
                 }
@@ -213,6 +220,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
             Msg.send(s, "<gold>/mgp kit save <режим> <id> [команда]</gold> — сохранить свой инвентарь как набор режима (слоты, броня); <gold>kit list|load|delete</gold>");
+            Msg.send(s, "<gold>/mgp npc create <id> [карта]</gold> — NPC (в режим, меню игр, действия); настройка — Shift+ПКМ по нему; <gold>npc list|edit|tp|delete</gold>");
             Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
             Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
             Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
@@ -1205,7 +1213,9 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "debug"));
+            } else if (a.length >= 2 && a[0].equalsIgnoreCase("npc")) {
+                out.addAll(ru.mgp.npc.NpcCommands.complete(plugin, a));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
                 out.addAll(List.of("on", "off"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("kit")) {

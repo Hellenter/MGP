@@ -82,8 +82,11 @@ public final class MapImporter {
         result.whenComplete((x, e) -> busy = false);
 
         World w = r.world();
-        boolean scan = r.detectChests() && !r.lobby();
+        // список сундуков нужен только режимам с лутом (если режима ещё нет — пишем, вдруг он будет с лутом)
+        var mode = plugin.registry().mode(r.modeId());
+        boolean scan = r.detectChests() && !r.lobby() && (mode == null || mode.chestLoot());
         Map<String, String> tiers = chestTiers();
+        Map<String, String> markers = mode != null ? mode.lootMarkers : ru.mgp.config.ModeConfig.DEFAULT_MARKERS;
         int padding = Math.max(0, plugin.getConfig().getInt("import.optimize-padding", 2));
         CompletableFuture.completedFuture(null).whenComplete((ignored, ex) -> {
             w.save(true); // сбросить изменения на диск перед копированием файлов
@@ -115,10 +118,10 @@ public final class MapImporter {
                     // сундуки ищем в уже вырезанных файлах: getTileEntities() на живом сервере их не возвращал
                     List<String> chests = scan ? new ArrayList<>() : null;
                     if (scan) {
-                        for (ChestScanner.Found f : ChestScanner.scan(RegionCutter.findOverworldDir(dst), fbox.minX(), fbox.minZ(), fbox.maxX(), fbox.maxZ())) {
-                            String tier = tiers.get(f.type());
-                            if (tier != null) chests.add(f.x() + " " + f.y() + " " + f.z() + " " + tier);
-                        }
+                        // есть сундуки с маркерами (железный/золотой слиток) — только они, иначе по типу блока
+                        var found = ChestScanner.scan(RegionCutter.findOverworldDir(dst), fbox.minX(), fbox.minZ(), fbox.maxX(), fbox.maxZ());
+                        for (ChestScanner.Tiered t : ChestScanner.tiers(found, markers, tiers))
+                            chests.add(t.x() + " " + t.y() + " " + t.z() + " " + t.tier());
                         Collections.sort(chests);
                     }
                     Bukkit.getScheduler().runTask(plugin, () -> {

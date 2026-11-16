@@ -35,6 +35,9 @@ public final class ModeConfig {
     private static String blank(String s) { return s == null || s.isBlank() || s.equalsIgnoreCase("all") ? null : s.trim(); }
     public final List<ItemSpec> startItems = new ArrayList<>();
     public final Map<String, LootTable> loot = new LinkedHashMap<>();
+    /** Предмет-маркер в контейнере на карте -> тир лута (loot-markers). */
+    public final Map<String, String> lootMarkers = new LinkedHashMap<>();
+    public static final Map<String, String> DEFAULT_MARKERS = Map.of("IRON_INGOT", "tier1", "GOLD_INGOT", "tier2");
     public final Map<String, List<TradeSpec>> trades = new LinkedHashMap<>();
     public final List<TimelineEvent> timeline = new ArrayList<>();
     public final List<String> winActions;
@@ -140,5 +143,21 @@ public final class ModeConfig {
 
         ConfigurationSection st = y.getConfigurationSection("settings");
         this.settings = st != null ? st : y.createSection("settings");
+
+        ConfigurationSection lm = y.getConfigurationSection("loot-markers");
+        if (lm != null) {
+            for (String k : lm.getKeys(false)) {
+                Material mat = Material.matchMaterial(k);
+                String tier = lm.getString(k);
+                if (mat != null && tier != null && !tier.isBlank()) lootMarkers.put(mat.name(), tier.trim());
+            }
+        } else {
+            lootMarkers.putAll(DEFAULT_MARKERS);
+        }
+    }
+
+    /** Заполнять ли контейнеры лутом: settings.chest-loot (по умолчанию — только у голодных игр) и есть таблицы loot. */
+    public boolean chestLoot() {
+        return !loot.isEmpty() && settings.getBoolean("chest-loot", "hunger_games".equalsIgnoreCase(type));
     }
 }
