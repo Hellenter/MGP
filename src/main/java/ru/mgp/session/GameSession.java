@@ -232,11 +232,12 @@ public final class GameSession {
     // ------------------------------------------------------------------ отсчёт
 
     private void checkStart() {
-        if (state == State.WAITING && players.size() >= mode.minPlayers) {
+        int min = minPlayers();
+        if (state == State.WAITING && players.size() >= min) {
             state = State.STARTING;
             countdown = mode.countdown;
             broadcast("<green>Набралось достаточно игроков! Старт через <yellow>" + countdown + "</yellow> сек.");
-        } else if (state == State.STARTING && players.size() < mode.minPlayers) {
+        } else if (state == State.STARTING && players.size() < min) {
             state = State.WAITING;
             cancelMapLoad();
             broadcast("<red>Недостаточно игроков, отсчёт остановлен.");
@@ -884,8 +885,8 @@ public final class GameSession {
         ph.put("map", map != null ? map.displayName : "<gray>голосование");
         ph.put("players", String.valueOf(players.size()));
         ph.put("max", String.valueOf(mode.maxPlayers));
-        ph.put("min", String.valueOf(mode.minPlayers));
-        ph.put("need", String.valueOf(Math.max(0, mode.minPlayers - players.size())));
+        ph.put("min", String.valueOf(minPlayers()));
+        ph.put("need", String.valueOf(Math.max(0, minPlayers() - players.size())));
         ph.put("countdown", state == State.STARTING ? String.valueOf(countdown) : "-");
         ph.put("alive", String.valueOf(alive.size()));
         ph.put("kills", String.valueOf(kills.getOrDefault(p.getUniqueId(), 0)));
@@ -936,6 +937,12 @@ public final class GameSession {
     public int elapsed() { return elapsed; }
     public Map<String, Vote> votes() { return votes; }
     public MGPPlugin plugin() { return plugin; }
+
+    /** Режим отладки в одиночку: см. {@link MGPPlugin#soloDebug()}. */
+    public boolean solo() { return plugin.soloDebug(); }
+
+    /** Сколько игроков нужно для старта (в отладке в одиночку — 1). */
+    public int minPlayers() { return solo() ? 1 : mode.minPlayers; }
 
     public boolean owns(World w) { return w != null && (w.equals(waitingWorld) || w.equals(gameWorld)); }
     public boolean isPlaying() { return state == State.PLAYING; }

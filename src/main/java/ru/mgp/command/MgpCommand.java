@@ -210,6 +210,15 @@ public final class MgpCommand implements TabExecutor {
 
     /** /mgp debug [режим] — что плагин на самом деле видит: тиры сундуков, лут, ломаемые блоки, состояние игрока. */
     private void debug(CommandSender s, String[] a) {
+        if (a.length > 1 && a[1].equalsIgnoreCase("solo")) {
+            boolean on = a.length > 2 ? a[2].equalsIgnoreCase("on") || a[2].equalsIgnoreCase("true") : !plugin.soloDebug();
+            plugin.setSoloDebug(on);
+            Msg.send(s, on ? "<green>Отладка в одиночку включена: <gray>игры стартуют с 1 игроком и не заканчиваются, когда игроков "
+                    + "или команды не осталось (время, цели и стадии работают). Выключить: /mgp debug solo off"
+                    : "<yellow>Отладка в одиночку выключена.");
+            return;
+        }
+        if (plugin.soloDebug()) Msg.send(s, "<yellow>Включена отладка в одиночку (/mgp debug solo off).");
         Msg.send(s, "<gold>Тиры сундуков: <white>" + ru.mgp.util.Cfg.chestTiers(plugin.getConfig()));
         String modeId = a.length > 1 ? a[1] : "hunger_games";
         ModeConfig m = plugin.registry().mode(modeId);
@@ -1454,6 +1463,11 @@ public final class MgpCommand implements TabExecutor {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
                 if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "debug"));
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("debug") && s.hasPermission("mgp.admin")) {
+                out.add("solo");
+                out.addAll(plugin.registry().modes().stream().map(m -> m.id).toList());
+            } else if (a.length == 3 && a[0].equalsIgnoreCase("debug") && a[1].equalsIgnoreCase("solo") && s.hasPermission("mgp.admin")) {
+                out.addAll(List.of("on", "off"));
             } else if (a.length >= 2 && a[0].equalsIgnoreCase("gun") && s.hasPermission("mgp.admin")) {
                 var g = plugin.guns();
                 if (a.length == 2) out.addAll(List.of("give", "ammo", "list"));
