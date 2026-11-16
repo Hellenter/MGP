@@ -43,6 +43,29 @@ public final class Sidebar {
         for (String n : names) if (!t.hasEntry(n)) t.addEntry(n);
     }
 
+    /** Цвета ников по командам (осада и т.п.): отдельная команда скорборда на каждый цвет. */
+    public void teamColors(java.util.Map<String, net.kyori.adventure.text.format.NamedTextColor> colors) {
+        for (org.bukkit.scoreboard.Team t : new java.util.ArrayList<>(board.getTeams())) {
+            if (!t.getName().startsWith("mgp_c_")) continue;
+            for (String e : new java.util.ArrayList<>(t.getEntries()))
+                if (!t.getName().equals(colorTeam(colors.get(e)))) t.removeEntry(e);
+            if (t.getEntries().isEmpty()) t.unregister();
+        }
+        for (var e : colors.entrySet()) {
+            String name = colorTeam(e.getValue());
+            org.bukkit.scoreboard.Team t = board.getTeam(name);
+            if (t == null) {
+                t = board.registerNewTeam(name);
+                t.color(e.getValue());
+            }
+            if (!t.hasEntry(e.getKey())) t.addEntry(e.getKey());
+        }
+    }
+
+    private static String colorTeam(net.kyori.adventure.text.format.NamedTextColor c) {
+        return c == null ? "" : "mgp_c_" + net.kyori.adventure.text.format.NamedTextColor.NAMES.key(c);
+    }
+
     public void update(Component title, List<Component> lines) {
         objective.displayName(title);
         int n = Math.min(lines.size(), MAX_LINES);

@@ -138,6 +138,8 @@ public final class HungerGamesLogic extends GameLogic {
     private void announceDeath(Player victim, Player killer) {
         if (killer != null && session.isAlive(killer)) {
             session.addKill(killer.getUniqueId());
+            int lv = session.mode.settings.getInt("kill-levels", 2);
+            if (lv > 0) killer.giveExpLevels(lv); // на зачарование; сбрасывается при выходе в хаб
             killer.playSound(killer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
             session.broadcast("<red>" + Msg.esc(victim.getName()) + " <gray>убит игроком <green>" + Msg.esc(killer.getName()));
         } else {
@@ -222,5 +224,11 @@ public final class HungerGamesLogic extends GameLogic {
     private static boolean hasTotem(Player p) {
         return p.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING
                 || p.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING;
+    }
+
+    @Override
+    public void onEnd() {
+        // уровни за убийства — только на эту игру
+        for (Player p : session.online()) { p.setLevel(0); p.setExp(0f); }
     }
 }

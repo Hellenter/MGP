@@ -37,7 +37,7 @@ public final class MGPPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        for (String res : new String[]{"modes/hunger_games.yml", "modes/build_battle.yml", "modes/hide_and_seek.yml", "modes/prop_hunt.yml",
+        for (String res : new String[]{"modes/hunger_games.yml", "modes/build_battle.yml", "modes/hide_and_seek.yml", "modes/prop_hunt.yml", "modes/siege.yml",
                 "maps/hg_example.yml", "maps/bb_example.yml"}) {
             if (!new File(getDataFolder(), res).exists()) saveResource(res, false);
         }
@@ -69,6 +69,7 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(wand, this);
         pm.registerEvents(shops, this);
         pm.registerEvents(friends, this);
+        pm.registerEvents(new ru.mgp.listener.FreeLapisListener(this), this);
 
         MgpCommand cmd = new MgpCommand(this);
         this.mgpCommand = cmd;

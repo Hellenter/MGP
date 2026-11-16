@@ -45,6 +45,7 @@ public final class SidebarService {
         Set<String> hidden = new HashSet<>();
         if (s != null && s.isPlaying() && s.mode.settings.getBoolean("hide-nametags", false))
             for (Player o : s.online()) hidden.add(o.getName());
+        sb.teamColors(s != null && (s.isPlaying() || s.state() == ru.mgp.session.GameSession.State.ENDING) ? s.logic().teamColors() : java.util.Map.of());
         sb.hideNametags(hidden);
     }
 

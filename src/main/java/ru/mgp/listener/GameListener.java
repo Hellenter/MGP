@@ -70,7 +70,8 @@ public final class GameListener implements Listener {
         Player p = e.getPlayer();
         GameSession s = of(p);
         if (s == null || s.gameWorld() == null) return;
-        e.setRespawnLocation(s.spectatorLocation());
+        org.bukkit.Location custom = s.isPlaying() && s.isAlive(p) ? s.logic().respawnLocation(p) : null;
+        e.setRespawnLocation(custom != null ? custom : s.spectatorLocation());
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (s.isSpectator(p.getUniqueId())) s.makeSpectator(p);
         });
@@ -91,6 +92,12 @@ public final class GameListener implements Listener {
         if (!(e.getPlayer() instanceof Player p)) return;
         GameSession s = of(p);
         if (s != null && s.isPlaying() && s.isAlive(p)) s.onContainerOpen(e.getInventory());
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {
+        GameSession s = plugin.sessions().byWorld(e.getEntity().getWorld());
+        if (s != null && s.isPlaying()) s.logic().onExplode(e);
     }
 
     @EventHandler(ignoreCancelled = true)

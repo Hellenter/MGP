@@ -232,6 +232,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
                     "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
                     "<yellow>/mgp setup teamspawn <карта> <команда|all> [группа] [locked]</yellow> — спавн команды (seeker, hider...) или закрытый до триггера",
+                    "<yellow>/mgp setup fortress <карта> [clear]</yellow> — крепость для осады из выделения (спавны: teamspawn defenders / attackers)",
                     "<yellow>/mgp setup objective <карта> <id> <процент></yellow> — цель на разрушение из выделения; <yellow>objective ... action</yellow>, <yellow>objectives <карта></yellow>",
                     "<yellow>/mgp setup sel</yellow> — меню граней выделения; <yellow>face <грань> <коорд.|+n|-n|here></yellow>, <yellow>box x1 y1 z1 x2 y2 z2</yellow>",
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
@@ -300,6 +301,24 @@ public final class MgpCommand implements TabExecutor {
                     if (locked && group == null) Msg.send(p, "<red>Закрытому спавну нужна группа, иначе его нечем открыть: /mgp setup teamspawn <карта> <команда> <группа> locked");
                 }
                 case "objective" -> objective(p, a);
+                case "fortress" -> {
+                    // /mgp setup fortress <карта> [clear] — область крепости для осады из выделения pos1/pos2
+                    need(a, 2);
+                    if (a.length > 2 && a[2].equalsIgnoreCase("clear")) {
+                        edit(p, a, 2, y -> y.set("fortress", null), "Крепость убрана");
+                        return;
+                    }
+                    Pos[] sel = selection(p);
+                    if (sel == null) return;
+                    ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+                    edit(p, a, 2, y -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("min", r.min().serialize());
+                        m.put("max", r.max().serialize());
+                        addMap(y, "fortress", m);
+                    }, "Область крепости добавлена (" + (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1)
+                            + "). Ещё область — выдели и введи команду снова; убрать всё — /mgp setup fortress " + a[1] + " clear");
+                }
                 case "objectives" -> listObjectives(p, a);
                 case "tpspawn" -> {
                     need(a, 3);
@@ -972,7 +991,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "teamspawn", "objective", "objectives", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -993,7 +1012,7 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script") && a[4].equalsIgnoreCase("set")) {
                 out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
-                out.addAll(List.of("all", "seeker", "hider"));
+                out.addAll(List.of("all", "seeker", "hider", "defenders", "attackers"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
                 out.add("locked");
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective")) {
