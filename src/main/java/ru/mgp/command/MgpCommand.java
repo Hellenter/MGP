@@ -13,6 +13,7 @@ import ru.mgp.config.MapConfig;
 import ru.mgp.config.ModeConfig;
 import ru.mgp.session.GameSession;
 import ru.mgp.ui.GameSelectorMenu;
+import ru.mgp.util.Cfg;
 import ru.mgp.util.Msg;
 import ru.mgp.util.Pos;
 
@@ -230,6 +231,8 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup trader <карта> <набор сделок> [профессия]",
                     "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
                     "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
+                    "<yellow>/mgp setup teamspawn <карта> <команда|all> [группа] [locked]</yellow> — спавн команды (seeker, hider...) или закрытый до триггера",
+                    "<yellow>/mgp setup objective <карта> <id> <процент></yellow> — цель на разрушение из выделения; <yellow>objective ... action</yellow>, <yellow>objectives <карта></yellow>",
                     "<yellow>/mgp setup sel</yellow> — меню граней выделения; <yellow>face <грань> <коорд.|+n|-n|here></yellow>, <yellow>box x1 y1 z1 x2 y2 z2</yellow>",
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
                     "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
@@ -279,6 +282,42 @@ public final class MgpCommand implements TabExecutor {
                 case "spawn" -> edit(p, a, 2, y -> addString(y, "spawns", Pos.of(loc).serialize()), "Спавн добавлен");
                 case "delspawn" -> deleteSpawn(p, a);
                 case "spawns" -> listSpawns(p, a);
+                case "teamspawn" -> {
+                    // /mgp setup teamspawn <карта> <команда|all> [группа] [locked]
+                    need(a, 3);
+                    String team = a[2].equalsIgnoreCase("all") || a[2].equals("-") ? null : a[2].toLowerCase(Locale.ROOT);
+                    String group = a.length > 3 && !a[3].equalsIgnoreCase("locked") ? a[3].toLowerCase(Locale.ROOT) : null;
+                    boolean locked = Arrays.stream(a).skip(3).anyMatch(x -> x.equalsIgnoreCase("locked"));
+                    edit(p, a, 3, y -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("pos", Pos.of(loc).serialize());
+                        if (team != null) m.put("team", team);
+                        if (group != null) m.put("group", group);
+                        if (locked) m.put("enabled", false);
+                        addMap(y, "spawn-points", m);
+                    }, "Спавн добавлен: " + (team == null ? "для всех" : "команда " + team)
+                            + (group == null ? "" : ", группа " + group) + (locked ? " <gray>(закрыт до действия <yellow>spawns: enable " + (group == null ? "<группа>" : group) + "</yellow>)" : ""));
+                    if (locked && group == null) Msg.send(p, "<red>Закрытому спавну нужна группа, иначе его нечем открыть: /mgp setup teamspawn <карта> <команда> <группа> locked");
+                }
+                case "objective" -> objective(p, a);
+                case "objectives" -> listObjectives(p, a);
+                case "tpspawn" -> {
+                    need(a, 3);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    if (a[2].startsWith("p")) {
+                        int k;
+                        try { k = Integer.parseInt(a[2].substring(1)); } catch (NumberFormatException e) { k = -1; }
+                        if (k < 1 || k > m.spawnPoints.size()) { Msg.send(p, "<red>Нет спавна " + Msg.esc(a[2])); return; }
+                        p.teleport(m.spawnPoints.get(k - 1).pos().toLocation(mapWorld(p, m)));
+                        return;
+                    }
+                    int n;
+                    try { n = Integer.parseInt(a[2]); } catch (NumberFormatException e) { n = -1; }
+                    if (n < 1 || n > m.spawns.size()) { Msg.send(p, "<red>Нет спавна №" + Msg.esc(a[2]) + " (всего " + m.spawns.size() + ")"); return; }
+                    p.teleport(m.spawns.get(n - 1).toLocation(mapWorld(p, m)));
+                    Msg.send(p, "<green>Спавн №" + n + " карты " + m.id);
+                }
                 case "clearspawns" -> edit(p, a, 2, y -> y.set("spawns", new ArrayList<String>()), "Спавны очищены");
                 case "spectator" -> edit(p, a, 2, y -> y.set("spectator", Pos.of(loc).serialize()), "Точка наблюдателей задана");
                 case "seekerspawn" -> edit(p, a, 2, y -> {
@@ -637,13 +676,29 @@ public final class MgpCommand implements TabExecutor {
         need(a, 2);
         MapConfig m = plugin.registry().map(a[1]);
         if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
-        if (m.spawns.isEmpty()) { Msg.send(p, "<gray>Спавнов нет. Встань на точку: /mgp setup spawn " + m.id); return; }
-        Msg.send(p, "<gold>Спавны " + m.id + " (" + m.spawns.size() + "):");
+        if (m.spawns.isEmpty() && m.spawnPoints.isEmpty()) { Msg.send(p, "<gray>Спавнов нет. Встань на точку: /mgp setup spawn " + m.id); return; }
         Location l = p.getLocation();
+        if (!m.spawnPoints.isEmpty()) {
+            Msg.send(p, "<gold>Спавны команд и групп " + m.id + " (" + m.spawnPoints.size() + "):");
+            for (int i = 0; i < m.spawnPoints.size(); i++) {
+                MapConfig.SpawnPoint sp = m.spawnPoints.get(i);
+                Pos s = sp.pos();
+                double d = Math.sqrt(sq(s.x() - l.getX()) + sq(s.y() - l.getY()) + sq(s.z() - l.getZ()));
+                p.sendMessage(Msg.parse(String.format(Locale.ROOT,
+                        "<gray>p%d.</gray> <white>%s</white> <yellow>%s</yellow>%s%s <dark_gray>(%.0f бл.)</dark_gray> "
+                                + "<aqua><click:run_command:'/mgp setup tpspawn %s p%d'><hover:show_text:'Телепорт'>[тп]</hover></click></aqua>",
+                        i + 1, s.serialize(), sp.team() == null ? "все" : Msg.esc(sp.team()),
+                        sp.group() == null ? "" : " <light_purple>группа " + Msg.esc(sp.group()),
+                        sp.enabled() ? "" : " <red>закрыт", d, m.id, i + 1)));
+            }
+            if (m.spawns.isEmpty()) return;
+        }
+        Msg.send(p, "<gold>Спавны " + m.id + " (" + m.spawns.size() + "):");
         for (int i = 0; i < m.spawns.size(); i++) {
             Pos s = m.spawns.get(i);
             double d = Math.sqrt(sq(s.x() - l.getX()) + sq(s.y() - l.getY()) + sq(s.z() - l.getZ()));
-            String tp = "/tp " + p.getName() + " " + Msg.esc(s.serialize());
+            // свой телепорт: /tp из Essentials не понимает yaw/pitch и пишет «Игрок не найден»
+            String tp = "/mgp setup tpspawn " + m.id + " " + (i + 1);
             String del = "/mgp setup delspawn " + m.id + " " + (i + 1);
             p.sendMessage(Msg.parse(String.format(Locale.ROOT,
                     "<gray>%d.</gray> <white>%s</white> <dark_gray>(%.0f бл.)</dark_gray> "
@@ -654,6 +709,103 @@ public final class MgpCommand implements TabExecutor {
     }
 
     private static double sq(double v) { return v * v; }
+
+    /**
+     * /mgp setup objective <карта> <id> [процент] [название...] — цель на разрушение из выделения pos1/pos2;
+     * /mgp setup objective <карта> <id> action <действие...> | clear | remove
+     */
+    private void objective(Player p, String[] a) {
+        if (a.length < 3) {
+            Msg.send(p, "<red>/mgp setup objective <карта> <id> [процент] [название]");
+            Msg.send(p, "<gray>Область — выделение pos1/pos2. Потом: <yellow>objective <карта> <id> action <действие></yellow>, clear, remove");
+            return;
+        }
+        String id = a[2];
+        String sub = a.length > 3 ? a[3].toLowerCase(Locale.ROOT) : "";
+        switch (sub) {
+            case "action" -> {
+                need(a, 5);
+                String act = String.join(" ", Arrays.copyOfRange(a, 4, a.length));
+                edit(p, a, 3, y -> editObjective(y, id, m -> {
+                    List<String> l = new ArrayList<>(Cfg.strings(m.get("actions")));
+                    l.add(act);
+                    m.put("actions", l);
+                }), "Действие добавлено к цели " + id + ": " + Msg.esc(act));
+            }
+            case "clear" -> edit(p, a, 3, y -> editObjective(y, id, m -> m.put("actions", new ArrayList<String>())), "Действия цели " + id + " очищены");
+            case "remove" -> edit(p, a, 3, y -> {
+                List<Map<?, ?>> l = new ArrayList<>(y.getMapList("objectives"));
+                l.removeIf(m -> id.equals(String.valueOf(m.get("id"))));
+                y.set("objectives", l.isEmpty() ? null : l);
+            }, "Цель " + id + " удалена");
+            default -> {
+                Pos[] sel = selection(p);
+                if (sel == null) return;
+                double pct;
+                int nameFrom = 3;
+                try { pct = Double.parseDouble(sub.replace("%", "")); nameFrom = 4; } catch (NumberFormatException e) { pct = 50; }
+                double percent = Math.max(1, Math.min(100, pct));
+                String name = a.length > nameFrom ? String.join(" ", Arrays.copyOfRange(a, nameFrom, a.length)) : null;
+                ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+                long vol = (long) (r.maxX() - r.minX() + 1) * (r.maxY() - r.minY() + 1) * (r.maxZ() - r.minZ() + 1);
+                if (vol > ru.mgp.session.Objectives.MAX_VOLUME) { Msg.send(p, "<red>Слишком большая область: " + vol + " блоков (максимум " + ru.mgp.session.Objectives.MAX_VOLUME + ")"); return; }
+                int solid = 0;
+                for (int x = r.minX(); x <= r.maxX(); x++) for (int yy = r.minY(); yy <= r.maxY(); yy++) for (int z = r.minZ(); z <= r.maxZ(); z++)
+                    if (p.getWorld().getBlockAt(x, yy, z).getType().isSolid()) solid++;
+                int solidCount = solid;
+                edit(p, a, 3, y -> editObjective(y, id, m -> {
+                    m.put("min", r.min().serialize());
+                    m.put("max", r.max().serialize());
+                    m.put("percent", percent);
+                    if (name != null) m.put("name", name.contains("<") ? name : "<red>" + name);
+                    else m.putIfAbsent("name", "<red>" + id);
+                    m.putIfAbsent("show", true);
+                    m.putIfAbsent("actions", new ArrayList<String>());
+                }), "Цель " + id + ": разрушить " + Math.round(percent) + "% из " + solidCount + " блоков постройки");
+                Msg.send(p, "<gray>Что произойдёт: <yellow>/mgp setup objective " + a[1] + " " + id + " action <действие></yellow>, например "
+                        + "<white>spawns: enable stage2</white>, <white>title: <red>Бункер уничтожен!</white>");
+            }
+        }
+    }
+
+    /** Найти цель по id в objectives (или создать) и изменить. */
+    private static void editObjective(YamlConfiguration y, String id, java.util.function.Consumer<Map<String, Object>> fn) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        boolean found = false;
+        for (Map<?, ?> raw : y.getMapList("objectives")) {
+            Map<String, Object> m = new LinkedHashMap<>(Cfg.asMap(raw));
+            if (id.equals(String.valueOf(m.get("id")))) { fn.accept(m); found = true; }
+            out.add(m);
+        }
+        if (!found) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", id);
+            fn.accept(m);
+            if (!m.containsKey("min")) throw new IllegalArgumentException("Цели " + id + " нет — сначала создай её из выделения: /mgp setup objective <карта> " + id + " [процент]");
+            out.add(m);
+        }
+        y.set("objectives", out);
+    }
+
+    private void listObjectives(Player p, String[] a) {
+        need(a, 2);
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        if (m.objectives.isEmpty()) { Msg.send(p, "<gray>Целей нет. Выдели постройку pos1/pos2 и введи /mgp setup objective " + m.id + " <id> <процент>"); return; }
+        Msg.send(p, "<gold>Цели " + m.id + ":");
+        for (MapConfig.Objective o : m.objectives) {
+            p.sendMessage(Msg.parse("<gray>• <white>" + Msg.esc(o.id()) + "</white> " + o.name() + " <gray>— " + Math.round(o.percent()) + "%, "
+                    + o.region().min().serialize() + " .. " + o.region().max().serialize()));
+            for (String act : o.actions()) p.sendMessage(Msg.parse("<dark_gray>    → <gray>" + Msg.esc(act)));
+        }
+    }
+
+    /** Мир, в котором заданы координаты карты: исходный мир импорта (source.world), если загружен, иначе мир игрока. */
+    private static org.bukkit.World mapWorld(Player p, MapConfig m) {
+        String wn = m.yaml.getString("source.world");
+        org.bukkit.World w = wn == null ? null : org.bukkit.Bukkit.getWorld(wn);
+        return w != null ? w : p.getWorld();
+    }
 
     private static void need(String[] a, int n) {
         if (a.length < n) throw new IllegalArgumentException("Не хватает аргументов. /mgp setup — справка");
@@ -820,7 +972,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "teamspawn", "objective", "objectives", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -840,6 +992,14 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("hold", "button", "plate", "zone", "tphere", "action", "set", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script") && a[4].equalsIgnoreCase("set")) {
                 out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
+                out.addAll(List.of("all", "seeker", "hider"));
+            } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
+                out.add("locked");
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective")) {
+                out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
+            } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {
+                out.addAll(List.of("spawns:", "title:", "message:", "sound:", "mode:"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("alsomode")) {
                 plugin.registry().modes().forEach(m -> { out.add(m.id); out.add("-" + m.id); });
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("biome")) {

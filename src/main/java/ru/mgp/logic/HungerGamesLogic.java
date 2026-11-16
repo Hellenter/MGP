@@ -53,7 +53,7 @@ public final class HungerGamesLogic extends GameLogic {
         // Сначала режим игры, потом телепорт в другой мир: иначе клиент получает старый режим (ADVENTURE)
         // из пакета смены мира и бесконечно «бьёт» блоки, хотя сервер считает его SURVIVAL.
         for (Player p : session.alivePlayers()) PlayerUtil.reset(p, GameMode.SURVIVAL);
-        session.spreadToSpawns(session.map().spawns);
+        session.spreadToSpawns(session.spawnsFor(null));
         for (Player p : session.alivePlayers()) {
             session.equip(p);
             Msg.title(p, "<gold>Голодные игры", freeze > 0 ? "<yellow>Старт через " + freeze + "..." : "<red>В бой!");
@@ -186,7 +186,7 @@ public final class HungerGamesLogic extends GameLogic {
     public boolean handleAction(String action, Player target) {
         switch (action.trim().toLowerCase(Locale.ROOT)) {
             case "deathmatch" -> {
-                session.spreadToSpawns(session.map().spawns);
+                session.spreadToSpawns(session.spawnsFor(null));
                 session.broadcast("<dark_red><bold>ДЕЗМАТЧ! <red>Все перенесены на спавны.");
                 return true;
             }

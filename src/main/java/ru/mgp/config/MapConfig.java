@@ -19,6 +19,18 @@ public final class MapConfig {
     }
     public record Plot(Region region, Pos spawn) {}
     /**
+     * Спавн с командой и группой (spawn-points). team — для кого (роль или команда режима, например seeker / hider);
+     * пусто — для всех. group — имя группы: её включают и выключают действием «spawns: enable <группа>» из триггера,
+     * скрипта или цели. enabled: false — группа закрыта до включения. Из открытых спавнов берутся спавны с наибольшим
+     * priority (по умолчанию 0, у закрытых сначала групп — 1: открылся новый рубеж — возрождаются уже там).
+     */
+    public record SpawnPoint(Pos pos, String team, String group, boolean enabled, int priority) {}
+    /**
+     * Цель на разрушение (objectives): когда в области разрушено percent% исходных твёрдых блоков,
+     * выполняются actions (один раз за игру). show — шкала прогресса у игроков.
+     */
+    public record Objective(String id, String name, Region region, double percent, boolean show, List<String> actions) {}
+    /**
      * Скриптовый объект карты вместо командных блоков (см. session/MapScripts).
      * type: hold — встать рядом с блоком и держать Shift hold сек.; button — ПКМ по блоку (кнопка, рычаг, люк...);
      *       plate — наступить на блок (нажимная плита); zone — войти в радиус.
@@ -40,6 +52,8 @@ public final class MapConfig {
     public final double weight;
     public final List<String> description;
     public final List<Pos> spawns = new ArrayList<>();
+    public final List<SpawnPoint> spawnPoints = new ArrayList<>();
+    public final List<Objective> objectives = new ArrayList<>();
     public final Pos spectator;
     public final Pos center;
     /** Биом для всей карты (id, например plains или minecraft:snowy_plains); null — как в шаблоне. */
@@ -111,10 +125,29 @@ public final class MapConfig {
                     Cfg.bool(m, "cancel-use", false),
                     Cfg.strings(m.get("actions"))));
         }
+        for (Map<?, ?> raw : y.getMapList("spawn-points")) {
+            Map<String, Object> m = Cfg.asMap(raw);
+            Pos pos = Pos.parse(Cfg.str(m, "pos", null));
+            if (pos == null) continue;
+            String team = blankToNull(Cfg.str(m, "team", null)), group = blankToNull(Cfg.str(m, "group", null));
+            boolean en = Cfg.bool(m, "enabled", true);
+            spawnPoints.add(new SpawnPoint(pos, team == null ? null : team.toLowerCase(java.util.Locale.ROOT),
+                    group == null ? null : group.toLowerCase(java.util.Locale.ROOT), en, Cfg.integer(m, "priority", en ? 0 : 1)));
+        }
+        for (Map<?, ?> raw : y.getMapList("objectives")) {
+            Map<String, Object> m = Cfg.asMap(raw);
+            Pos a = Pos.parse(Cfg.str(m, "min", null)), b = Pos.parse(Cfg.str(m, "max", null));
+            if (a == null || b == null) continue;
+            String oid = Cfg.str(m, "id", "objective" + objectives.size());
+            objectives.add(new Objective(oid, Cfg.str(m, "name", "<red>" + oid), Region.of(a, b),
+                    Math.max(1, Math.min(100, Cfg.dbl(m, "percent", 50))), Cfg.bool(m, "show", true), Cfg.strings(m.get("actions"))));
+        }
         for (Map<?, ?> raw : y.getMapList("plots")) {
             Map<String, Object> m = Cfg.asMap(raw);
             plots.add(new Plot(Region.of(Pos.parse(Cfg.str(m, "min", null)), Pos.parse(Cfg.str(m, "max", null))),
                     Pos.parse(Cfg.str(m, "spawn", null))));
         }
     }
+
+    private static String blankToNull(String s) { return s == null || s.isBlank() ? null : s.trim(); }
 }

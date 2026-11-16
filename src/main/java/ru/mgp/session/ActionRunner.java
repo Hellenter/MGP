@@ -41,6 +41,7 @@ import java.util.*;
  *   particle: <тип> [кол-во] [x y z] — частицы у игрока или в точке
  *   setblock: x y z <блок>       — поставить блок в мире игры (AIR — убрать)
  *   wait: <сек>                  — пауза: следующие действия выполнятся позже
+ *   spawns: enable|disable <группа> — открыть или закрыть группу спавнов (spawn-points с group)
  */
 public final class ActionRunner {
     private ActionRunner() {}
@@ -176,6 +177,17 @@ public final class ActionRunner {
                 if (m == null || !m.isBlock()) throw new IllegalArgumentException("неизвестный блок " + t[3]);
                 world.getBlockAt((int) Math.floor(Double.parseDouble(t[0])), (int) Math.floor(Double.parseDouble(t[1])),
                         (int) Math.floor(Double.parseDouble(t[2]))).setType(m);
+            }
+            case "spawns" -> {
+                // spawns: enable <группа> | disable <группа>
+                String[] t = arg.trim().split("\\s+");
+                if (t.length < 2) throw new IllegalArgumentException("ожидалось spawns: enable|disable <группа>");
+                boolean on = switch (t[0].toLowerCase(Locale.ROOT)) {
+                    case "enable", "on", "open" -> true;
+                    case "disable", "off", "close" -> false;
+                    default -> throw new IllegalArgumentException("ожидалось enable или disable, а не " + t[0]);
+                };
+                s.setSpawnGroup(t[1], on);
             }
             case "mode" -> {
                 if (!s.logic().handleAction(arg, target))
