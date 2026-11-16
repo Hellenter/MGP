@@ -1,0 +1,149 @@
+# ===================== ОСАДА (Siege) =====================
+# Две команды. Защитники держат крепость и чинят её молотом, атакующие (больше ресурсов, способности)
+# должны убить всех защитников. Руками атакующие ломают только непрочные блоки (breakable-blocks),
+# стены крепости — только ТНТ, а его мало. Защитники продержались до конца времени — их победа.
+#
+# Карта: крепость — /mgp setup fortress <карта> (из выделения pos1/pos2, можно несколько областей),
+#        спавны — /mgp setup teamspawn <карта> defenders | attackers
+type: siege
+display-name: "<red><bold>Осада"
+icon: TNT
+description:
+  - "<gray>Защити крепость и продержись"
+  - "<gray>до конца — или возьми её штурмом!"
+
+min-players: 4
+max-players: 16
+max-sessions: 2
+countdown: 45
+fast-countdown: 10
+end-delay: 10
+time-limit: "10:00"
+
+map-vote:
+  type: MOST_VOTES
+  options: 3
+
+natural-mobs: false
+gamerules:
+  show_advancement_messages: false
+  show_death_messages: false
+  immediate_respawn: true
+  keep_inventory: false
+
+default-kit: ""
+kits: {}
+start-items: []
+
+win-actions:
+  - "message: <gold>Победа в осаде!"
+
+# Плейсхолдеры режима: {team} {defenders} {attackers} {integrity} {respawn}
+sidebar:
+  title: "<red><bold>ОСАДА"
+  waiting:
+    - "<dark_gray>────────────"
+    - "<gray>Карта: {map}"
+    - "<gray>Игроки: <green>{players}/{max}"
+    - "<gray>Статус: <yellow>{state}"
+    - "<dark_gray>────────────"
+  playing:
+    - "<dark_gray>────────────"
+    - "<gray>Ты: {team}"
+    - "<gray>До конца: <yellow>{time}"
+    - ""
+    - "<aqua>Защитники: <white>{defenders}"
+    - "<red>Атакующие: <white>{attackers}"
+    - "<gray>Крепость: <white>{integrity}"
+    - ""
+    - "<gray>Карта: {map}"
+    - "<dark_gray>────────────"
+  ending:
+    - "<dark_gray>────────────"
+    - "<gold>Игра окончена!"
+    - "<dark_gray>────────────"
+
+settings:
+  defender-ratio: 0.4            # доля защитников (пати остаются в одной команде)
+  attacker-respawn: 5            # через сколько сек. возрождается атакующий (-1 — не возрождается)
+  attacker-keep-inventory: true  # атакующий не теряет вещи при смерти (новый ТНТ не выдаётся!)
+  tnt-auto-ignite: true          # ТНТ поджигается сразу при установке
+  tnt-fuse: 3                    # сек. до взрыва
+  # Что можно ломать руками (обеим командам). Остальное — только ТНТ. Поставленные за игру блоки ломаются всегда.
+  # Можно: имя блока, маску (*_PLANKS) или тег (#minecraft:logs)
+  breakable-blocks:
+    - "#minecraft:dirt"
+    - GRASS_BLOCK
+    - DIRT_PATH
+    - FARMLAND
+    - SAND
+    - RED_SAND
+    - GRAVEL
+    - "*_PLANKS"
+    - "*_WOOL"
+    - "*_CARPET"
+    - "#minecraft:leaves"
+    - LADDER
+    - SCAFFOLDING
+    - HAY_BLOCK
+    - "*_FENCE"
+    - "*_FENCE_GATE"
+    - SHORT_GRASS
+    - TALL_GRASS
+  explosion-proof: [BEDROCK, BARRIER, OBSIDIAN]   # ТНТ не берёт
+
+  repair:                        # молот защитников: ПКМ по стене возвращает исходные блоки крепости
+    item: BRUSH
+    radius: 3
+    blocks-per-use: 3
+    cooldown: 1.0
+
+  defender-items:
+    - "STONE_SWORD"
+    - "BOW"
+    - "ARROW 24"
+    - "COOKED_BEEF 16"
+    - "OAK_PLANKS 32"
+    - { material: IRON_HELMET, slot: head }
+  attacker-items:
+    - "IRON_SWORD"
+    - "CROSSBOW"
+    - "ARROW 32"
+    - "TNT 6"
+    - "COOKED_BEEF 16"
+    - "LADDER 16"
+    - "COBBLESTONE 32"
+    - { material: IRON_HELMET, slot: head }
+    - { material: IRON_BOOTS, slot: feet }
+
+  # Способности: ПКМ предметом. Действия — как у триггеров (velocity, effect, nearby-effect, sound, particle...).
+  abilities:
+    - id: leap
+      team: attackers
+      item: FEATHER
+      name: "<aqua><bold>Рывок"
+      lore: ["<gray>Прыжок вперёд"]
+      cooldown: 12
+      actions:
+        - "velocity: 1.6 0.6"
+        - "sound: minecraft:entity.breeze.jump"
+    - id: rage
+      team: attackers
+      item: BLAZE_POWDER
+      name: "<red><bold>Ярость"
+      lore: ["<gray>Сила и скорость на 8 сек."]
+      cooldown: 45
+      actions:
+        - "effect: strength 0 8"
+        - "effect: speed 1 8"
+        - "sound: minecraft:entity.ravager.roar"
+    - id: smoke
+      team: attackers
+      item: GUNPOWDER
+      name: "<gray><bold>Дымовая шашка"
+      lore: ["<gray>Ослепляет защитников рядом (5 бл.)"]
+      cooldown: 40
+      actions:
+        - "particle: CAMPFIRE_SIGNAL_SMOKE 40"
+        - "nearby-effect: 5 blindness 0 4"
+        - "sound: minecraft:block.fire.extinguish"

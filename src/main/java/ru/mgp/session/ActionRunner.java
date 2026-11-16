@@ -41,6 +41,8 @@ import java.util.*;
  *   particle: <тип> [кол-во] [x y z] — частицы у игрока или в точке
  *   setblock: x y z <блок>       — поставить блок в мире игры (AIR — убрать)
  *   wait: <сек>                  — пауза: следующие действия выполнятся позже
+ *   velocity: <вперёд> [вверх]   — рывок игрока туда, куда он смотрит
+ *   nearby-effect: <радиус> <эффект> [уровень] [сек] — эффект игрокам рядом (в командных режимах — только противникам)
  *   spawns: enable|disable <группа> — открыть или закрыть группу спавнов (spawn-points с group)
  */
 public final class ActionRunner {
@@ -177,6 +179,34 @@ public final class ActionRunner {
                 if (m == null || !m.isBlock()) throw new IllegalArgumentException("неизвестный блок " + t[3]);
                 world.getBlockAt((int) Math.floor(Double.parseDouble(t[0])), (int) Math.floor(Double.parseDouble(t[1])),
                         (int) Math.floor(Double.parseDouble(t[2]))).setType(m);
+            }
+            case "velocity", "launch" -> {
+                // velocity: <вперёд> [вверх] — рывок туда, куда смотрит игрок
+                String[] t = arg.trim().split("\\s+");
+                double fwd = Double.parseDouble(t[0]), up = t.length > 1 ? Double.parseDouble(t[1]) : 0.4;
+                for (Player p : targets) {
+                    org.bukkit.util.Vector dir = p.getLocation().getDirection().setY(0);
+                    if (dir.lengthSquared() > 1e-6) dir.normalize();
+                    p.setVelocity(dir.multiply(fwd).setY(up));
+                    p.setFallDistance(0);
+                }
+            }
+            case "nearby-effect" -> {
+                // nearby-effect: <радиус> <эффект> [уровень] [сек] — эффект живым игрокам рядом, кроме самого игрока
+                String[] t = arg.trim().split("\\s+");
+                double r = Double.parseDouble(t[0]);
+                PotionEffectType pt = RegistryAccess.registryAccess().getRegistry(RegistryKey.MOB_EFFECT)
+                        .get(NamespacedKey.minecraft(t[1].toLowerCase(Locale.ROOT)));
+                if (pt == null) throw new IllegalArgumentException("неизвестный эффект " + t[1]);
+                int amp = t.length > 2 ? Integer.parseInt(t[2]) : 0, sec = t.length > 3 ? Integer.parseInt(t[3]) : 5;
+                var colors = s.logic().teamColors();
+                for (Player src : targets)
+                    for (Player o : s.alivePlayers()) {
+                        if (o.equals(src) || !o.getWorld().equals(src.getWorld())) continue;
+                        if (o.getLocation().distanceSquared(src.getLocation()) > r * r) continue;
+                        if (!colors.isEmpty() && colors.get(o.getName()) == colors.get(src.getName())) continue; // свои
+                        o.addPotionEffect(new PotionEffect(pt, sec * 20, amp));
+                    }
             }
             case "spawns" -> {
                 // spawns: enable <группа> | disable <группа>

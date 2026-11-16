@@ -49,6 +49,14 @@ public abstract class GameLogic {
     public void onCreatureSpawn(CreatureSpawnEvent e) {}
     public void onMove(PlayerMoveEvent e) {}
     public void onInteract(PlayerInteractEvent e) {}
+    /** Взрыв в мире игры (ТНТ, крипер...). */
+    public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {}
+
+    /** Где возродить игрока после смерти (null — точка наблюдателя). */
+    public org.bukkit.Location respawnLocation(Player p) { return null; }
+
+    /** Цвет ника по командам: ник → цвет (пусто — без команд). */
+    public Map<String, net.kyori.adventure.text.format.NamedTextColor> teamColors() { return Map.of(); }
 
     /** Удар игрока по сущности (до проверок ванили) — например, по хитбоксу маскировки. */
     public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {}
