@@ -56,6 +56,8 @@ public final class MGPPlugin extends JavaPlugin {
         sidebars = new SidebarService(this);
         sessions = new SessionManager(this);
         parties = new ru.mgp.party.PartyService(this);
+        friends = new ru.mgp.friend.FriendService(this);
+        friends.load();
         shops = new ru.mgp.shop.ShopService(this);
         shops.load();
 
@@ -66,6 +68,7 @@ public final class MGPPlugin extends JavaPlugin {
         wand = new ru.mgp.editor.ScriptWand(this);
         pm.registerEvents(wand, this);
         pm.registerEvents(shops, this);
+        pm.registerEvents(friends, this);
 
         MgpCommand cmd = new MgpCommand(this);
         this.mgpCommand = cmd;
@@ -78,6 +81,9 @@ public final class MGPPlugin extends JavaPlugin {
             PluginCommand c = getCommand(name);
             if (c != null) { c.setExecutor(partyCmd); c.setTabCompleter(partyCmd); }
         }
+        ru.mgp.friend.FriendCommand friendCmd = new ru.mgp.friend.FriendCommand(this);
+        PluginCommand fc = getCommand("friend");
+        if (fc != null) { fc.setExecutor(friendCmd); fc.setTabCompleter(friendCmd); }
         ServerCommand serverCmd = new ServerCommand(this);
         for (String name : new String[]{"server", "smp"}) {
             PluginCommand c = getCommand(name);
@@ -115,6 +121,8 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.party.PartyService parties;
     public ru.mgp.party.PartyService parties() { return parties; }
+    private ru.mgp.friend.FriendService friends;
+    public ru.mgp.friend.FriendService friends() { return friends; }
     public HubService hub() { return hub; }
     public VisibilityService visibility() { return visibility; }
     public SidebarService sidebars() { return sidebars; }
