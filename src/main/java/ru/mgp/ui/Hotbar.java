@@ -54,7 +54,7 @@ public final class Hotbar {
         PlayerInventory inv = p.getInventory();
         boolean hasVotes = s.votes().values().stream().anyMatch(Vote::interactive);
         if (hasVotes) inv.setItem(0, tagged(Material.PAPER, "<gold><bold>Голосование</bold> <gray>(ПКМ)", VOTE));
-        if (s.mode.kits.size() > 1) inv.setItem(1, tagged(Material.CHEST, "<aqua><bold>Наборы</bold> <gray>(ПКМ)", KIT));
+        if (s.mode.kits.size() > 1 && s.logic().kitsInLobby()) inv.setItem(1, tagged(Material.CHEST, "<aqua><bold>Наборы</bold> <gray>(ПКМ)", KIT));
         inv.setItem(8, tagged(Material.RED_BED, "<red><bold>Выйти в лобби</bold> <gray>(ПКМ)", LEAVE));
     }
 

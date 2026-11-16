@@ -27,43 +27,38 @@ public final class Sidebar {
 
     public Scoreboard board() { return board; }
 
-    /** Скрыть ники над головами у перечисленных игроков (пустой список — показать всех). */
-    public void hideNametags(java.util.Collection<String> names) {
-        org.bukkit.scoreboard.Team t = board.getTeam("mgp_nt");
-        if (names.isEmpty()) {
-            if (t != null) t.unregister();
-            return;
-        }
-        if (t == null) {
-            t = board.registerNewTeam("mgp_nt");
-            t.setOption(org.bukkit.scoreboard.Team.Option.NAME_TAG_VISIBILITY, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
-            t.setOption(org.bukkit.scoreboard.Team.Option.COLLISION_RULE, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
-        }
-        for (String e : new java.util.ArrayList<>(t.getEntries())) if (!names.contains(e)) t.removeEntry(e);
-        for (String n : names) if (!t.hasEntry(n)) t.addEntry(n);
-    }
-
-    /** Цвета ников по командам (осада и т.п.): отдельная команда скорборда на каждый цвет. */
-    public void teamColors(java.util.Map<String, net.kyori.adventure.text.format.NamedTextColor> colors) {
+    /**
+     * Команды скорборда этого зрителя: цвет ника по команде (осада и т.п.) и скрытые ники (прятки, противники в осаде).
+     * Запись может быть только в одной команде, поэтому скрытый цветной ник живёт в своей команде "mgp_c_<цвет>_h":
+     * ник не виден, а цвет (и цвет свечения) остаётся.
+     */
+    public void teams(java.util.Map<String, net.kyori.adventure.text.format.NamedTextColor> colors, java.util.Collection<String> hidden) {
+        java.util.Map<String, String> want = new java.util.HashMap<>();
+        for (var e : colors.entrySet()) if (e.getValue() != null)
+            want.put(e.getKey(), colorTeam(e.getValue()) + (hidden.contains(e.getKey()) ? "_h" : ""));
+        for (String n : hidden) want.putIfAbsent(n, "mgp_nt");
         for (org.bukkit.scoreboard.Team t : new java.util.ArrayList<>(board.getTeams())) {
-            if (!t.getName().startsWith("mgp_c_")) continue;
-            for (String e : new java.util.ArrayList<>(t.getEntries()))
-                if (!t.getName().equals(colorTeam(colors.get(e)))) t.removeEntry(e);
+            if (!t.getName().startsWith("mgp_")) continue;
+            for (String e : new java.util.ArrayList<>(t.getEntries())) if (!t.getName().equals(want.get(e))) t.removeEntry(e);
             if (t.getEntries().isEmpty()) t.unregister();
         }
-        for (var e : colors.entrySet()) {
-            String name = colorTeam(e.getValue());
+        for (var e : want.entrySet()) {
+            String name = e.getValue();
             org.bukkit.scoreboard.Team t = board.getTeam(name);
             if (t == null) {
                 t = board.registerNewTeam(name);
-                t.color(e.getValue());
+                if (name.startsWith("mgp_c_")) t.color(colors.get(e.getKey()));
+                if (name.equals("mgp_nt") || name.endsWith("_h"))
+                    t.setOption(org.bukkit.scoreboard.Team.Option.NAME_TAG_VISIBILITY, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
+                if (name.equals("mgp_nt"))
+                    t.setOption(org.bukkit.scoreboard.Team.Option.COLLISION_RULE, org.bukkit.scoreboard.Team.OptionStatus.NEVER);
             }
             if (!t.hasEntry(e.getKey())) t.addEntry(e.getKey());
         }
     }
 
     private static String colorTeam(net.kyori.adventure.text.format.NamedTextColor c) {
-        return c == null ? "" : "mgp_c_" + net.kyori.adventure.text.format.NamedTextColor.NAMES.key(c);
+        return "mgp_c_" + net.kyori.adventure.text.format.NamedTextColor.NAMES.key(c);
     }
 
     public void update(Component title, List<Component> lines) {
