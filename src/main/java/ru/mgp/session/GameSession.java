@@ -593,16 +593,30 @@ public final class GameSession {
         }
     }
 
-    /** Выдаёт стартовые предметы, выбранный кит и его эффекты. */
-    public void equip(Player p) {
+    /** Выдаёт выбранный кит, его эффекты и стартовые предметы. */
+    public void equip(Player p) { equip(p, null); }
+
+    /**
+     * То же для игрока команды team: выбранный кит, если он подходит команде, иначе первый кит этой команды.
+     * Сначала кит (предметы по своим слотам, броня сразу надевается), потом start-items в свободные слоты.
+     * Возвращает выданный кит или null.
+     */
+    public Kit equip(Player p, String team) {
         PlayerInventory inv = p.getInventory();
-        for (ItemSpec s : mode.startItems) give(inv, s);
         String kitId = kitChoice.get(p.getUniqueId());
         Kit kit = kitId == null ? null : mode.kits.get(kitId);
+        if (kit != null && (!kit.fits(team) || (kit.permission() != null && !p.hasPermission(kit.permission())))) kit = null;
+        if (kit == null && team != null) {
+            for (Kit k : mode.kits.values())
+                if (k.team() != null && k.fits(team) && (k.permission() == null || p.hasPermission(k.permission()))) { kit = k; break; }
+        }
         if (kit != null) {
-            for (ItemSpec s : kit.items()) give(inv, s);
+            for (ItemSpec s : kit.items()) if (s.slot != null) give(inv, s);
+            for (ItemSpec s : kit.items()) if (s.slot == null) give(inv, s);
             ActionRunner.run(this, kit.actions(), p);
         }
+        for (ItemSpec s : mode.startItems) give(inv, s);
+        return kit;
     }
 
     private static void give(PlayerInventory inv, ItemSpec s) {
