@@ -111,8 +111,12 @@ public final class HideAndSeekLogic extends GameLogic {
             if (i < n) firstSeekers.add(p.getUniqueId());
             PlayerUtil.reset(p, GameMode.ADVENTURE); // до телепорта в другой мир (см. HungerGamesLogic)
         }
-        session.spreadToSpawns(session.map().spawns);
+        // прячущиеся — на спавны hider (или общие), ищущие — в комнату seeker-spawn или на спавны seeker
         Pos seekerSpawn = Pos.parse(session.map().yaml.getString("seeker-spawn"));
+        List<Player> hidersList = new ArrayList<>(), seekersList = new ArrayList<>();
+        for (Player p : all) (roles.get(p.getUniqueId()) == Role.SEEKER ? seekersList : hidersList).add(p);
+        session.spreadToSpawns(hidersList, "hider");
+        if (seekerSpawn == null) session.spreadToSpawns(seekersList, "seeker");
         hideLeft = hideTime;
         nextAutoTaunt = hideTime + autoTaunt;
         for (Player p : all) {
@@ -191,13 +195,11 @@ public final class HideAndSeekLogic extends GameLogic {
             }
             if (hideLeft == 0) {
                 Pos seekerSpawn = Pos.parse(session.map().yaml.getString("seeker-spawn"));
-                if (seekerSpawn == null) return; // ищущие и так на спавнах карты
-                // ищущие из отдельной комнаты выходят на спавны карты
-                List<Pos> sp = new ArrayList<>(session.map().spawns);
-                Collections.shuffle(sp, session.random());
-                int i = 0;
-                for (Player p : session.alivePlayers())
-                    if (isSeeker(p) && !sp.isEmpty()) p.teleport(sp.get(i++ % sp.size()).toLocation(session.gameWorld()));
+                if (seekerSpawn == null) return; // ищущие и так на своих спавнах
+                // ищущие из отдельной комнаты выходят на спавны seeker (или общие)
+                List<Player> seekersOut = new ArrayList<>();
+                for (Player p : session.alivePlayers()) if (isSeeker(p)) seekersOut.add(p);
+                session.spreadToSpawns(seekersOut, "seeker");
             }
             return;
         }
@@ -356,7 +358,7 @@ public final class HideAndSeekLogic extends GameLogic {
         if (!(e instanceof EntityDamageByEntityEvent ee) || !(ee.getDamager() instanceof Player attacker)) {
             if (e.getCause() == EntityDamageEvent.DamageCause.VOID) {
                 if (isHider(victim)) caught(victim, null);
-                else victim.teleport(session.spectatorLocation());
+                else victim.teleport(isSeeker(victim) ? session.spawnFor("seeker") : session.spectatorLocation());
             }
             return;
         }

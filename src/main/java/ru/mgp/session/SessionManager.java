@@ -125,7 +125,7 @@ public final class SessionManager {
 
     /** Карта годится для игры: есть шаблон и есть куда ставить игроков (спавны или участки). */
     public boolean playable(MapConfig m) {
-        return plugin.worlds().templateExists(m.template) && (!m.spawns.isEmpty() || !m.plots.isEmpty());
+        return plugin.worlds().templateExists(m.template) && (!m.spawns.isEmpty() || !m.spawnPoints.isEmpty() || !m.plots.isEmpty());
     }
 
     /** Почему в режим нельзя зайти, или null. Админу — с подробностями по каждой карте. */

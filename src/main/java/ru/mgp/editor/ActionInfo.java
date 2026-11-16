@@ -51,6 +51,7 @@ public final class ActionInfo {
             case "weather" -> Material.WATER_BUCKET;
             case "border" -> Material.IRON_BARS;
             case "refill-chests" -> Material.CHEST_MINECART;
+            case "spawns" -> Material.RESPAWN_ANCHOR;
             default -> Material.WRITABLE_BOOK;
         };
     }
@@ -69,6 +70,7 @@ public final class ActionInfo {
             case "setblock" -> "поставить блок";
             case "particle", "particles" -> "частицы";
             case "wait" -> "пауза " + arg(raw) + " с";
+            case "spawns" -> (arg(raw).startsWith("disable") ? "закрыть" : "открыть") + " спавны";
             case "command" -> "команда";
             default -> type(raw);
         };

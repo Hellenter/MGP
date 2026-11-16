@@ -56,6 +56,9 @@ public final class GameSession {
     private final Map<String, String> chosenModifiers = new LinkedHashMap<>();
     private final Set<String> firedTriggers = new HashSet<>();
     private final MapScripts scripts = new MapScripts(this);
+    private final Objectives objectives = new Objectives(this);
+    /** Группы спавнов, включённые или выключенные во время игры (spawns: enable/disable). */
+    private final Map<String, Boolean> spawnGroups = new HashMap<>();
     private final Map<String, Set<UUID>> firedPerPlayer = new HashMap<>();
 
     private World waitingWorld;
@@ -189,6 +192,7 @@ public final class GameSession {
         for (Vote v : votes.values()) v.remove(u);
         boolean wasAlive = alive.remove(u);
         scripts.clear(p);
+        objectives.clear(p);
         if (toHub) plugin.hub().send(p);
         else plugin.visibility().refresh(p);
 
@@ -468,7 +472,9 @@ public final class GameSession {
         elapsed = 0;
         alive.clear();
         alive.addAll(players);
+        spawnGroups.clear();
         logic.onStart();
+        if (state == State.PLAYING) objectives.start();
         for (Map.Entry<String, String> e : chosenModifiers.entrySet()) {
             ModifierGroup g = modifierGroup(e.getKey());
             ModifierGroup.Option o = g == null ? null : g.option(e.getValue());
@@ -492,6 +498,7 @@ public final class GameSession {
         }
         if (lockedTime != null) gameWorld.setTime(lockedTime);
         checkTriggers();
+        objectives.tick();
         logic.onTick();
         if (state == State.PLAYING && mode.timeLimit > 0 && elapsed >= mode.timeLimit) logic.onTimeUp();
     }
@@ -516,6 +523,57 @@ public final class GameSession {
                 if (t.mode() == MapConfig.Trigger.Mode.ONCE) break;
             }
         }
+    }
+
+    // ------------------------------------------------------------------ спавны команд и динамические спавны
+
+    /** Включить или выключить группу спавнов (действие spawns: enable|disable <группа>). */
+    public void setSpawnGroup(String group, boolean on) {
+        spawnGroups.put(group.toLowerCase(Locale.ROOT), on);
+    }
+
+    private boolean active(MapConfig.SpawnPoint sp) {
+        if (sp.group() == null) return sp.enabled();
+        return spawnGroups.getOrDefault(sp.group(), sp.enabled());
+    }
+
+    /**
+     * Спавны для команды или роли (seeker, hider, attackers...; null — общие). Берутся открытые spawn-points этой
+     * команды, а если их нет — общие; из них — с наибольшим priority. Ничего нет — обычный список spawns карты.
+     */
+    public List<Pos> spawnsFor(String team) {
+        if (map == null) return List.of();
+        String t = team == null ? null : team.toLowerCase(Locale.ROOT);
+        List<MapConfig.SpawnPoint> own = new ArrayList<>(), common = new ArrayList<>();
+        for (MapConfig.SpawnPoint sp : map.spawnPoints) {
+            if (!active(sp)) continue;
+            if (sp.team() == null) common.add(sp);
+            else if (sp.team().equals(t)) own.add(sp);
+        }
+        List<MapConfig.SpawnPoint> pick = !own.isEmpty() ? own : common;
+        if (pick.isEmpty()) return map.spawns;
+        int best = Integer.MIN_VALUE;
+        for (MapConfig.SpawnPoint sp : pick) best = Math.max(best, sp.priority());
+        // обычные spawns карты считаются общими с priority 0
+        List<Pos> out = new ArrayList<>();
+        for (MapConfig.SpawnPoint sp : pick) if (sp.priority() == best) out.add(sp.pos());
+        if (pick == common && best <= 0) out.addAll(map.spawns);
+        return out;
+    }
+
+    /** Случайный спавн команды (для возрождения). */
+    public Location spawnFor(String team) {
+        List<Pos> l = spawnsFor(team);
+        if (l.isEmpty()) return spectatorLocation();
+        return l.get(random.nextInt(l.size())).toLocation(gameWorld);
+    }
+
+    /** Раскидать указанных игроков по спавнам команды. */
+    public void spreadToSpawns(List<Player> who, String team) {
+        List<Pos> sp = new ArrayList<>(spawnsFor(team));
+        if (sp.isEmpty()) { plugin.getLogger().warning("На карте " + map.id + " нет спавнов" + (team == null ? "" : " для " + team) + "!"); return; }
+        Collections.shuffle(sp, random);
+        for (int i = 0; i < who.size(); i++) who.get(i).teleport(sp.get(i % sp.size()).toLocation(gameWorld));
     }
 
     /** Раскидывает живых игроков по спавнам в случайном порядке (лишние спавны остаются пустыми). */
@@ -682,6 +740,7 @@ public final class GameSession {
             if (win) ActionRunner.run(this, mode.winActions, p);
         }
         scripts.clearAll();
+        objectives.clearAll();
         logic.onEnd();
     }
 
@@ -773,6 +832,7 @@ public final class GameSession {
     public State state() { return state; }
     public GameLogic logic() { return logic; }
     public MapScripts scripts() { return scripts; }
+    public Objectives objectives() { return objectives; }
     public MapConfig map() { return map; }
     public World gameWorld() { return gameWorld; }
     public World waitingWorld() { return waitingWorld; }

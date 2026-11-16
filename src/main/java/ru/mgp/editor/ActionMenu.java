@@ -143,6 +143,11 @@ final class ActionMenu extends Menu {
         add(25, Material.WRITABLE_BOOK, "<white><bold>Своё действие", List.of("<gray>Любая строка, как в файле карты:", "<gray>mode: deathmatch, time: 18000 ..."), p ->
                 wand.ask(p, "<aqua>Действие целиком (тип: аргументы):", t -> addAction(p, t)));
 
+        add(26, Material.RESPAWN_ANCHOR, "<light_purple><bold>Открыть спавны", List.of("<gray>Включает группу спавнов", "<gray>(/mgp setup teamspawn ... <группа> locked):", "<gray>игроки начнут возрождаться там"), p ->
+                wand.ask(p, "<aqua>Имя группы спавнов <gray>(например stage2; «-имя» — закрыть):", t -> {
+                    String g = t.trim().split("\\s+")[0];
+                    addAction(p, g.startsWith("-") ? "spawns: disable " + g.substring(1) : "spawns: enable " + g);
+                }));
         set(31, Items.icon(Material.ARROW, "<gray>Назад", List.of(), false), wand::reopenEditor);
     }
 
