@@ -70,6 +70,10 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(shops, this);
         pm.registerEvents(friends, this);
         pm.registerEvents(new ru.mgp.listener.FreeLapisListener(this), this);
+        npcs = new ru.mgp.npc.NpcService(this);
+        npcs.load();
+        pm.registerEvents(npcs, this);
+        npcs.start();
 
         MgpCommand cmd = new MgpCommand(this);
         this.mgpCommand = cmd;
@@ -104,6 +108,7 @@ public final class MGPPlugin extends JavaPlugin {
     public void onDisable() {
         if (mgpCommand != null) mgpCommand.shutdown();
         if (wand != null) wand.shutdown();
+        if (npcs != null) npcs.shutdown();
         if (panel != null) panel.stop();
         if (sessions != null) sessions.shutdown();
     }
@@ -114,6 +119,7 @@ public final class MGPPlugin extends JavaPlugin {
         registry.load();
         servers.load();
         shops.load();
+        if (npcs != null) npcs.load();
     }
 
     public WorldService worlds() { return worlds; }
@@ -136,4 +142,7 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.editor.ScriptWand wand;
     public ru.mgp.editor.ScriptWand wand() { return wand; }
+
+    private ru.mgp.npc.NpcService npcs;
+    public ru.mgp.npc.NpcService npcs() { return npcs; }
 }

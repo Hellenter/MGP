@@ -343,6 +343,7 @@ public final class GameSession {
         markersOnMap = false;
         if (mode.chestLoot() || mode.settings.getBoolean("empty-chests", true)) scanContainers(mode.chestLoot());
         spawnTraders();
+        plugin.npcs().spawnInGame(gameWorld, map.id);
     }
 
     /**

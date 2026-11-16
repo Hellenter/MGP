@@ -115,6 +115,11 @@ public final class MgpCommand implements TabExecutor {
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
                 try { KitCommands.handle(plugin, p, a); } catch (IllegalArgumentException e) { Msg.send(p, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
             }
+            case "npc", "npcs" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                ru.mgp.npc.NpcCommands.handle(plugin, p, a);
+            }
             case "wand" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -215,6 +220,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
             Msg.send(s, "<gold>/mgp kit save <режим> <id> [команда]</gold> — сохранить свой инвентарь как набор режима (слоты, броня); <gold>kit list|load|delete</gold>");
+            Msg.send(s, "<gold>/mgp npc create <id> [карта]</gold> — NPC (в режим, меню игр, действия); настройка — Shift+ПКМ по нему; <gold>npc list|edit|tp|delete</gold>");
             Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
             Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
             Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
@@ -1207,7 +1213,9 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "debug"));
+            } else if (a.length >= 2 && a[0].equalsIgnoreCase("npc")) {
+                out.addAll(ru.mgp.npc.NpcCommands.complete(plugin, a));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
                 out.addAll(List.of("on", "off"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("kit")) {
