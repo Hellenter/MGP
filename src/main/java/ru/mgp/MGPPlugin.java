@@ -65,6 +65,7 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(new MenuListener(this), this);
         pm.registerEvents(new PlayerListener(this), this);
         pm.registerEvents(new GameListener(this), this);
+        pm.registerEvents(new ru.mgp.session.ExplosiveArrows(this), this);
         wand = new ru.mgp.editor.ScriptWand(this);
         pm.registerEvents(wand, this);
         pm.registerEvents(shops, this);

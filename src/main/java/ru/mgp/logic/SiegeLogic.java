@@ -203,6 +203,9 @@ public final class SiegeLogic extends GameLogic {
 
     private boolean inPrep() { return prepTime > 0 && session.elapsed() < prepTime; }
 
+    @Override
+    public boolean explosivesAllowed() { return !inPrep(); }
+
     /** Наборы команды, доступные игроку. */
     private List<ru.mgp.config.Kit> teamKits(Team t, Player p) {
         List<ru.mgp.config.Kit> out = new ArrayList<>();
