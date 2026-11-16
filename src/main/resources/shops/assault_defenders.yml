@@ -44,24 +44,33 @@ categories:
     items:
       - { item: "GUN p30", price: "MONEY 150" }
       - { item: "GUN deagle", price: "MONEY 450" }
-      - { item: "GUN uzi", price: "MONEY 600" }
-      - { item: "GUN mp5", price: "MONEY 750" }
+      - { item: "GUN uzi", price: "MONEY 550" }
+      - { item: "GUN mp5", price: "MONEY 700" }
+      - { item: "GUN ppsh41", price: "MONEY 900" }
       - { item: "GUN spas", price: "MONEY 900" }
+      - { item: "GUN m16", price: "MONEY 1200" }
+      - { item: "GUN famas", price: "MONEY 1150" }
       - { item: "GUN m4a1s", price: "MONEY 1300" }
-      - { item: "GUN famas", price: "MONEY 1100" }
       - { item: "GUN ak47", price: "MONEY 1400" }
+      - { item: "GUN asval", price: "MONEY 1600" }
       - { item: "GUN aa12", price: "MONEY 1800" }
-      - { item: "GUN dragunov", price: "MONEY 1700" }
-      - { item: "GUN pkp", price: "MONEY 2200" }
-      - { item: "GUN awp", price: "MONEY 2500" }
+      - { item: "GUN kar98k", price: "MONEY 1300" }
+      - { item: "GUN dragunov", price: "MONEY 1900" }
+      - { item: "GUN pkp", price: "MONEY 2300" }
+      - { item: "GUN awp", price: "MONEY 2700" }
   - name: "<gray>Патроны"
     icon: PHANTOM_MEMBRANE
     items:
       - { item: "AMMO 9mm 30", price: "MONEY 40" }
+      - { item: "AMMO 762x25 71", price: "MONEY 80" }
+      - { item: "AMMO 50ae 14", price: "MONEY 60" }
       - { item: "AMMO 556 30", price: "MONEY 60" }
-      - { item: "AMMO 762 30", price: "MONEY 70" }
+      - { item: "AMMO 762x39 30", price: "MONEY 70" }
+      - { item: "AMMO 9x39 20", price: "MONEY 70" }
+      - { item: "AMMO 762x54 20", price: "MONEY 90" }
+      - { item: "AMMO 792 10", price: "MONEY 60" }
+      - { item: "AMMO 338 10", price: "MONEY 120" }
       - { item: "AMMO shotgun 16", price: "MONEY 60" }
-      - { item: "AMMO 50cal 10", price: "MONEY 80" }
   - name: "<aqua>Броня"
     icon: IRON_CHESTPLATE
     items:
