@@ -52,6 +52,9 @@ public abstract class GameLogic {
     /** Взрыв в мире игры (ТНТ, крипер...). */
     public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {}
 
+    /** Можно ли сейчас взрывать (разрывные стрелы); например, не во время подготовки осады. */
+    public boolean explosivesAllowed() { return true; }
+
     /** Где возродить игрока после смерти (null — точка наблюдателя). */
     public org.bukkit.Location respawnLocation(Player p) { return null; }
 

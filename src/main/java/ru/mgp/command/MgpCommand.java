@@ -115,6 +115,17 @@ public final class MgpCommand implements TabExecutor {
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
                 try { KitCommands.handle(plugin, p, a); } catch (IllegalArgumentException e) { Msg.send(p, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
             }
+            case "arrow", "arrows" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                int n = 16;
+                try { if (a.length > 1) n = Math.max(1, Math.min(64, Integer.parseInt(a[1]))); } catch (NumberFormatException ignored) {}
+                String type = a.length > 2 ? a[2] : "default";
+                p.getInventory().addItem(ru.mgp.util.ItemSpec.explosiveArrow(n, type)).values()
+                        .forEach(left -> p.getWorld().dropItem(p.getLocation(), left));
+                Msg.send(p, "<green>Выдано разрывных стрел: " + n + (type.equals("default") ? "" : " <gray>(тип " + Msg.esc(type) + ")")
+                        + "<gray>. Взрываются только в режимах с settings.explosive-arrows.enabled: true");
+            }
             case "npc", "npcs" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -220,6 +231,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
             Msg.send(s, "<gold>/mgp kit save <режим> <id> [команда]</gold> — сохранить свой инвентарь как набор режима (слоты, броня); <gold>kit list|load|delete</gold>");
+            Msg.send(s, "<gold>/mgp arrow [кол-во] [тип]</gold> — разрывные стрелы (для наборов: потом /mgp kit save); взрыв — settings.explosive-arrows режима");
             Msg.send(s, "<gold>/mgp npc create <id> [карта]</gold> — NPC (в режим, меню игр, действия); настройка — Shift+ПКМ по нему; <gold>npc list|edit|tp|delete</gold>");
             Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
             Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
@@ -1213,7 +1225,7 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "debug"));
             } else if (a.length >= 2 && a[0].equalsIgnoreCase("npc")) {
                 out.addAll(ru.mgp.npc.NpcCommands.complete(plugin, a));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
