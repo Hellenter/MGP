@@ -32,7 +32,11 @@ public final class MgpCommand implements TabExecutor {
         this.plugin = plugin;
         this.display = new SelectionDisplay(plugin, pos1, pos2, posWorld);
         this.selOps = new SelectionOps(pos1, pos2, posWorld, display::update);
+        this.selWand = new SelectionWand(plugin, this::setPos);
+        plugin.getServer().getPluginManager().registerEvents(selWand, plugin);
     }
+
+    private final SelectionWand selWand;
 
     private final SelectionOps selOps;
 
@@ -236,7 +240,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup center <карта> [размер барьера]",
                     "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
                     "<yellow>/mgp setup trader <карта> <набор сделок> [профессия]",
-                    "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
+                    "<yellow>/mgp setup pos1 | pos2</yellow> — углы области там, где стоишь; <yellow>/mgp setup wand</yellow> — топор выделения: ЛКМ по блоку pos1, ПКМ pos2",
                     "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
                     "<yellow>/mgp setup teamspawn <карта> <команда|all> [группа] [locked]</yellow> — спавн команды (seeker, hider...) или закрытый до триггера",
                     "<yellow>/mgp setup fortress <карта> [clear|list|del <n>|tp <n>]</yellow> — крепость для осады из выделения (спавны: teamspawn defenders / attackers)",
@@ -437,6 +441,11 @@ public final class MgpCommand implements TabExecutor {
                     addMap(y, "traders", m);
                 }, "Торговец добавлен");
                 case "pos1", "pos2" -> setPos(p, sub.equals("pos1"), Pos.ofBlock(loc));
+                case "wand" -> {
+                    var left = p.getInventory().addItem(selWand.item());
+                    if (!left.isEmpty()) { Msg.send(p, "<red>Инвентарь полон"); return; }
+                    Msg.send(p, "<green>Топор выделения: <red>ЛКМ</red> по блоку — pos1, <blue>ПКМ</blue> — pos2. <gray>Палочка скриптов — это /mgp wand.");
+                }
                 case "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "selection", "faces" ->
                         selOps.handle(p, Arrays.copyOfRange(a, 1, a.length));
                 case "clearsel" -> {
@@ -1219,7 +1228,7 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 2 && a[0].equalsIgnoreCase("join")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
-                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
+                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
                         "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
