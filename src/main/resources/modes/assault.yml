@@ -1,0 +1,140 @@
+# ===================== ШТУРМ (Assault) =====================
+# Большая осада по стадиям. Две команды: атакующие разрушают цели на стороне защитников, защитники мешают.
+# На каждую стадию своё время (по умолчанию stage-time). Разрушили цели стадии — следующая стадия,
+# спавны обеих команд переезжают дальше. Не успели — победа защиты. Взяли последнюю стадию — победа атаки.
+#
+# Экономика: монеты за убийства, разрушенные цели, оборону (убийство рядом с целью) и взятую стадию.
+# Тратятся в магазине лимбо: после смерти игрок попадает в лимбо своей команды, покупает оружие, броню
+# или целый набор и выходит через проход (триггер с действием mode: deploy) на текущий спавн команды.
+#
+# Карта (подробно — README, раздел «Штурм»):
+#   цели          — /mgp setup objective <карта> <id> [процент] [название]   (из выделения pos1/pos2)
+#   стадии        — /mgp setup assault <карта> stage <n> [время] [название]; stage <n> objective <id>
+#   спавны стадий — /mgp setup assault <карта> stage <n> spawn <attackers|defenders>   (там, где стоишь)
+#   лимбо         — /mgp setup assault <карта> limbo <attackers|defenders>; выход — /mgp setup assault <карта> exit
+type: assault
+display-name: "<gold><bold>Штурм"
+icon: CROSSBOW
+description:
+  - "<gray>Атакуй цели по стадиям или удержи их."
+  - "<gray>Зарабатывай монеты и покупай снаряжение."
+
+min-players: 4
+max-players: 24
+max-sessions: 1
+countdown: 60
+fast-countdown: 10
+end-delay: 10
+time-limit: 0                    # не используется: время задают стадии (stage-time или time стадии в карте)
+
+map-vote:
+  type: MOST_VOTES
+  options: 3
+
+natural-mobs: false
+gamerules:
+  show_advancement_messages: false
+  show_death_messages: false
+  immediate_respawn: true
+  keep_inventory: false
+
+default-kit: ""
+# Наборы с team выдаются бесплатно при каждом выходе из лимбо (первый набор команды) вместо defender-items / attacker-items.
+# Платные наборы — в магазинах (shops/assault_*.yml): товар с items: [...] и price: "MONEY n".
+kits: {}
+start-items:
+  - "COOKED_BEEF 8"
+
+win-actions:
+  - "message: <gold>Победа в штурме!"
+
+# Плейсхолдеры: {team} {stage} (1/3) {stage_name} {phase} {time} {money} {objectives} (1/2)
+#               {objectives_progress} (проценты целей стадии) {attackers} {defenders} {limbo}
+sidebar:
+  title: "<gold><bold>ШТУРМ"
+  waiting:
+    - "<dark_gray>────────────"
+    - "<gray>Карта: {map}"
+    - "<gray>Игроки: <green>{players}/{max}"
+    - "<gray>Статус: <yellow>{state}"
+    - "<dark_gray>────────────"
+  playing:
+    - "<dark_gray>────────────"
+    - "<gray>Ты: {team}"
+    - "<gray>Счёт: <gold>{money} ⛁"
+    - ""
+    - "<gray>Стадия: <yellow>{stage}"
+    - "{stage_name}"
+    - "<gray>{phase}: <yellow>{time}"
+    - "<gray>Цели: <white>{objectives_progress}"
+    - ""
+    - "<red>Атака: <white>{attackers} <dark_gray>| <aqua>Защита: <white>{defenders}"
+    - "<gray>Карта: {map}"
+    - "<dark_gray>────────────"
+  ending:
+    - "<dark_gray>────────────"
+    - "<gold>Игра окончена!"
+    - "<dark_gray>────────────"
+
+settings:
+  # Разрывные стрелы ("EXPLOSIVE_ARROW 8" в магазине атаки). Все параметры — в README, раздел «Разрывные стрелы».
+  explosive-arrows:
+    enabled: true
+    power: 2.0
+    break-blocks: true
+    self-damage: 0.5
+    team-damage: 0.0
+  empty-chests: true             # сундуки карты пустые
+  defender-ratio: 0.5            # доля защитников (пати остаются в одной команде)
+  prep-time: "1:00"              # подготовка перед первой стадией: закупка, зоны команд закрыты, PvP и взрывов нет
+  stage-time: "15:00"            # время стадии, если у стадии в карте не задано своё time
+  respawn-delay: 5               # сек. в лимбо после смерти, прежде чем можно выйти
+  limbo-timeout: 0               # через сколько сек. в лимбо выкинуть в бой автоматически (0 — не выкидывать)
+  spawn-protection: 3            # сек. неуязвимости после выхода из лимбо (снимается, если сам атакуешь)
+  keep-inventory: false          # false — после смерти покупки теряются, бесплатный набор выдаётся заново
+  drop-items: false              # выпадают ли вещи убитого (false — нет: нельзя «фармить» чужие покупки)
+  redeploy-on-stage: none        # при смене стадии перенести на новые спавны: none | defenders | attackers | all
+  hide-enemy-nametags: true      # ники противников не видны, союзников — видны
+  tnt-auto-ignite: true          # ТНТ поджигается сразу при установке
+  tnt-fuse: 3                    # сек. до взрыва
+  defender-tnt: false            # могут ли защитники ставить ТНТ
+  objective-hand-break: false    # true — атакующие могут ломать блоки целей руками (иначе только взрывы)
+  defenders-repair: false        # true — защитники могут заделывать цели блоками
+  # Магазин лимбо (изумруд в хотбаре): один на всех (shop: assault) или свой у каждой команды
+  shop:
+    attackers: assault_attackers
+    defenders: assault_defenders
+  economy:
+    start: 800                   # монет у каждого в начале
+    max: 16000                   # максимум на счёте (0 — без лимита)
+    kill: 100                    # за убийство противника
+    defense-kill: 75             # защитнику сверху, если убитый или он сам ближе defense-radius к цели стадии
+    defense-radius: 16
+    objective: 400               # каждому атакующему, кто ломал разрушенную цель (взрывом или руками)
+    objective-team: 200          # всей атаке за каждую разрушенную цель
+    stage-attackers: 300         # атаке за взятую стадию
+    stage-defenders: 300         # защите после потери стадии (на перегруппировку)
+    income: 50                   # всем раз в income-every сек. (0 — без дохода)
+    income-every: 60
+  # Что можно ломать руками (обеим командам). Блоки, поставленные за игру, ломаются всегда.
+  breakable-blocks:
+    - "*_PLANKS"
+    - "*_WOOL"
+    - LADDER
+    - SCAFFOLDING
+    - "*_FENCE"
+    - "*_FENCE_GATE"
+    - SHORT_GRASS
+    - TALL_GRASS
+    - "#minecraft:leaves"
+  explosion-proof: [BEDROCK, BARRIER, OBSIDIAN]   # взрывы не берут
+  # Бесплатное снаряжение при каждом выходе (если у команды нет набора с team в kits)
+  defender-items:
+    - "STONE_SWORD"
+    - "BOW"
+    - "ARROW 16"
+  attacker-items:
+    - "STONE_SWORD"
+    - "CROSSBOW"
+    - "ARROW 16"
+    - "TNT 1"

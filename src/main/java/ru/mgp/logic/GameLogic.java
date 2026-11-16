@@ -52,6 +52,24 @@ public abstract class GameLogic {
     /** Взрыв в мире игры (ТНТ, крипер...). */
     public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {}
 
+    /** Не держать игрока в play-зоне и зоне команды (например, он в лимбо штурма). */
+    public boolean zoneFree(Player p) { return false; }
+
+    /** Взрыв без сущности-источника (например, разрывная стрела без стрелка). */
+    public void onBlockExplode(org.bukkit.event.block.BlockExplodeEvent e) {}
+
+    /** Монеты на счёте игрока (товары магазинов с price: "MONEY n"); -1 — в режиме нет экономики. */
+    public int balance(Player p) { return -1; }
+
+    /** Списать монеты со счёта; false — не хватает или экономики нет. */
+    public boolean spend(Player p, int amount) { return false; }
+
+    /** Считается ли сейчас цель на разрушение (objectives): например, только цели текущей стадии штурма. */
+    public boolean objectiveActive(String id) { return true; }
+
+    /** Цель на разрушение разрушена (после её actions). */
+    public void onObjectiveDestroyed(ru.mgp.config.MapConfig.Objective o) {}
+
     /** Можно ли сейчас взрывать (разрывные стрелы); например, не во время подготовки осады. */
     public boolean explosivesAllowed() { return true; }
 

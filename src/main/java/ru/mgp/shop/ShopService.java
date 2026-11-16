@@ -39,6 +39,9 @@ public final class ShopService implements Listener {
             dir.mkdirs();
             plugin.saveResource("shops/bedwars.yml", false);
         }
+        // магазины Штурма (монеты счёта и наборы) — кладём, если их ещё нет
+        for (String res : new String[]{"shops/assault_attackers.yml", "shops/assault_defenders.yml"})
+            if (!new File(plugin.getDataFolder(), res).exists()) plugin.saveResource(res, false);
         File[] files = dir.listFiles((d, n) -> n.endsWith(".yml"));
         if (files == null) return;
         Arrays.sort(files);
@@ -122,28 +125,60 @@ public final class ShopService implements Listener {
         return n;
     }
 
+    /** Сколько у игрока валюты товара: предметов в инвентаре или монет на счёте (-1 — у режима нет счёта). */
+    int balance(Player p, Shop.Product pr) {
+        if (p == null) return 0;
+        if (!pr.money) return count(p, pr.currency);
+        GameSession s = plugin.sessions().of(p);
+        return s == null || !s.isPlaying() ? -1 : s.logic().balance(p);
+    }
+
     /** true — куплено. */
     boolean buy(Player p, Shop.Product pr) {
-        int have = count(p, pr.currency);
+        int have = balance(p, pr);
+        if (have < 0) {
+            p.sendMessage(Msg.parse("<red>Этот товар продаётся за монеты счёта — они есть только в режимах с экономикой (Штурм)"));
+            return false;
+        }
         if (have < pr.price) {
-            p.sendMessage(Msg.parse("<red>Не хватает: нужно ещё " + Shop.currencyColor(pr.currency) + Shop.currencyName(pr.currency, pr.price - have)));
+            p.sendMessage(Msg.parse("<red>Не хватает: нужно ещё " + pr.priceColor() + pr.priceText(pr.price - have)));
             p.playSound(p.getLocation(), org.bukkit.Sound.ENTITY_ENDERMAN_TELEPORT, 0.6f, 0.6f);
             return false;
         }
-        if (pr.price > 0) p.getInventory().removeItemAnySlot(new ItemStack(pr.currency, pr.price));
-        ItemStack give = pr.item.clone();
-        // броня сразу надевается (как в Bed Wars), снятая вещь уходит в инвентарь
-        org.bukkit.inventory.EquipmentSlot slot = give.getType().getEquipmentSlot();
-        if (slot.isArmor() && slot != org.bukkit.inventory.EquipmentSlot.BODY && give.getAmount() == 1) {
-            ItemStack old = p.getInventory().getItem(slot);
-            p.getInventory().setItem(slot, give);
-            give = old == null || old.getType().isAir() ? null : old;
+        if (pr.price > 0) {
+            if (pr.money) {
+                GameSession s = plugin.sessions().of(p);
+                if (s == null || !s.logic().spend(p, pr.price)) return false;
+            } else p.getInventory().removeItemAnySlot(new ItemStack(pr.currency, pr.price));
         }
-        Map<Integer, ItemStack> left = give == null ? Map.of() : p.getInventory().addItem(give);
-        for (ItemStack it : left.values()) p.getWorld().dropItemNaturally(p.getLocation(), it);
+        for (ItemStack it : pr.goods()) give(p, it.clone());
         p.playSound(p.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 0.8f, 2f);
-        p.sendMessage(Msg.parse("<green>Куплено: <white>" + itemName(pr.item)));
+        p.sendMessage(Msg.parse("<green>Куплено: <white>" + (pr.isBundle() ? Msg.esc(plain(pr.bundleName)) : itemName(pr.item))
+                + (pr.money && pr.price > 0 ? " <gray>(−" + pr.priceText(pr.price) + ")" : "")));
         return true;
+    }
+
+    private static String plain(String mm) {
+        return mm == null ? "Набор" : net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(Msg.parse(mm));
+    }
+
+    /** Метка цветной командной брони: при покупке настоящей брони она просто исчезает, а не падает в инвентарь. */
+    public static final String TEAM_ARMOR = "team-armor";
+
+    /** Выдать предмет: броня сразу надевается (как в Bed Wars), щит — во вторую руку, если она пуста. */
+    public static void give(Player p, ItemStack give) {
+        org.bukkit.inventory.EquipmentSlot slot = give.getType().getEquipmentSlot();
+        var inv = p.getInventory();
+        if (slot.isArmor() && slot != org.bukkit.inventory.EquipmentSlot.BODY && give.getAmount() == 1) {
+            ItemStack old = inv.getItem(slot);
+            inv.setItem(slot, give);
+            give = old == null || old.getType().isAir() || TEAM_ARMOR.equals(ru.mgp.util.Keys.tag(old)) ? null : old;
+        } else if (give.getType() == Material.SHIELD && inv.getItemInOffHand().getType().isAir()) {
+            inv.setItemInOffHand(give);
+            give = null;
+        }
+        Map<Integer, ItemStack> left = give == null ? Map.of() : inv.addItem(give);
+        for (ItemStack it : left.values()) p.getWorld().dropItemNaturally(p.getLocation(), it);
     }
 
     static String itemName(ItemStack it) {

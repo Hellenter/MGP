@@ -1,0 +1,57 @@
+# Магазин защиты в Штурме. Править удобнее в игре: /mgp shop assault_defenders
+# price: "MONEY n" — монеты счёта. Набор — items: [...] (всё за одну покупку), name и icon — как он выглядит.
+title: "<dark_gray>Арсенал защиты"
+npc-name: "<aqua><bold>АРСЕНАЛ ЗАЩИТЫ"
+profession: armorer
+categories:
+  - name: "<gold>Наборы"
+    icon: CHEST
+    items:
+      - name: "<gold>Страж"
+        icon: SHIELD
+        items:
+          - { material: IRON_SWORD, unbreakable: true }
+          - { material: SHIELD, unbreakable: true }
+          - { material: IRON_HELMET, unbreakable: true }
+          - { material: IRON_CHESTPLATE, unbreakable: true }
+        price: "MONEY 900"
+      - name: "<gold>Лучник"
+        icon: BOW
+        items:
+          - { material: BOW, enchants: { power: 2 }, unbreakable: true }
+          - "ARROW 48"
+          - { material: CHAINMAIL_CHESTPLATE, unbreakable: true }
+        price: "MONEY 750"
+      - name: "<gold>Строитель"
+        icon: OAK_PLANKS
+        items:
+          - { material: STONE_SWORD, unbreakable: true }
+          - "OAK_PLANKS 64"
+          - "LADDER 16"
+          - { material: IRON_AXE, unbreakable: true }
+        price: "MONEY 500"
+  - name: "<red>Оружие"
+    icon: IRON_SWORD
+    items:
+      - { item: { material: IRON_SWORD, unbreakable: true }, price: "MONEY 300" }
+      - { item: { material: DIAMOND_SWORD, unbreakable: true }, price: "MONEY 800" }
+      - { item: { material: BOW, unbreakable: true }, price: "MONEY 250" }
+      - { item: { material: BOW, enchants: { power: 2 }, unbreakable: true }, price: "MONEY 500" }
+      - { item: "ARROW 16", price: "MONEY 50" }
+      - { item: { material: SHIELD, unbreakable: true }, price: "MONEY 200" }
+  - name: "<aqua>Броня"
+    icon: IRON_CHESTPLATE
+    items:
+      - { item: { material: CHAINMAIL_CHESTPLATE, unbreakable: true }, price: "MONEY 250" }
+      - { item: { material: IRON_HELMET, unbreakable: true }, price: "MONEY 200" }
+      - { item: { material: IRON_CHESTPLATE, unbreakable: true }, price: "MONEY 450" }
+      - { item: { material: IRON_LEGGINGS, unbreakable: true }, price: "MONEY 350" }
+      - { item: { material: IRON_BOOTS, unbreakable: true }, price: "MONEY 200" }
+      - { item: { material: DIAMOND_CHESTPLATE, unbreakable: true }, price: "MONEY 1200" }
+  - name: "<light_purple>Полезное"
+    icon: GOLDEN_APPLE
+    items:
+      - { item: "GOLDEN_APPLE", price: "MONEY 150" }
+      - { item: "COOKED_BEEF 16", price: "MONEY 50" }
+      - { item: "OAK_PLANKS 32", price: "MONEY 60" }
+      - { item: "COBWEB 4", price: "MONEY 200" }
