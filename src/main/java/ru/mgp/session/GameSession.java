@@ -147,6 +147,9 @@ public final class GameSession {
             }
             waitingWorld = w;
             plugin.worlds().applyWorldRules(w, mode.gamerules);
+            // лобби ожидания: время режима (time:), иначе default-lobby.time (по умолчанию полдень); -1 — не трогать
+            long t = mode.fixedTime >= 0 ? mode.fixedTime : plugin.getConfig().getLong("default-lobby.time", 6000);
+            if (t >= 0) plugin.worlds().fixTime(w, t);
             state = State.WAITING;
             for (Player p : online()) sendToWaiting(p);
             checkStart();
@@ -332,6 +335,10 @@ public final class GameSession {
 
     private void prepareGameWorld() {
         plugin.worlds().applyWorldRules(gameWorld, mode.gamerules, map.gamerules);
+        if (mode.fixedTime >= 0) {
+            plugin.worlds().fixTime(gameWorld, mode.fixedTime);
+            lockedTime = mode.fixedTime;
+        }
         applyMapBiome();
         if (map.center != null) {
             WorldBorder b = gameWorld.getWorldBorder();

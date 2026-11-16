@@ -59,7 +59,7 @@ public final class BuildBattleLogic extends GameLogic {
         buildTime = Cfg.seconds(st.get("build-time"), 300);
         judgeTime = st.getInt("judge-time", 15);
         revealTime = Math.max(0, st.getInt("reveal-time", 10));
-        plotMargin = st.getInt("plot-margin", 3);
+        plotMargin = st.getInt("plot-margin", 5);
         themes = st.getStringList("themes");
         themeOptions = st.getInt("theme-options", 5);
         themeVote = Cfg.enumValue(VoteType.class, st.getString("theme-vote"), VoteType.MOST_VOTES);
@@ -392,7 +392,15 @@ public final class BuildBattleLogic extends GameLogic {
         MapConfig.Plot plot = plotOf.get(e.getPlayer().getUniqueId());
         if (plot == null) return;
         if (!plot.region().containsLoose(e.getTo(), plotMargin)) {
-            e.setTo(plot.spawn().toLocation(session.gameWorld()));
+            // мягко: останавливаем у края, а на спавн участка — только если уже снаружи (отбросило, телепорт)
+            if (plot.region().containsLoose(e.getFrom(), plotMargin)) {
+                org.bukkit.Location back = e.getFrom().clone();
+                back.setYaw(e.getTo().getYaw());
+                back.setPitch(e.getTo().getPitch());
+                e.setTo(back);
+            } else {
+                e.setTo(plot.spawn().toLocation(session.gameWorld()));
+            }
             e.getPlayer().sendActionBar(Msg.parse("<red>Нельзя покидать свой участок"));
         }
     }

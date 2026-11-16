@@ -24,6 +24,8 @@ public final class ModeConfig {
     public final String waitingTemplate;
     public final Pos waitingSpawn;
     public final double voidY;
+    /** time: время суток в игре и лобби ожидания, не идёт (6000 — полдень); -1 — не трогать. */
+    public final long fixedTime;
     public final VoteType mapVoteType;
     public final int mapVoteOptions;
     public final Map<String, String> gamerules = new LinkedHashMap<>();
@@ -63,6 +65,7 @@ public final class ModeConfig {
         this.waitingTemplate = y.getString("waiting.template", "waiting_lobby");
         this.waitingSpawn = Pos.parse(y.getString("waiting.spawn", "0.5 65 0.5"));
         this.voidY = y.getDouble("waiting.void-y", 0);
+        this.fixedTime = y.getLong("time", -1);
         this.mapVoteType = Cfg.enumValue(VoteType.class, y.getString("map-vote.type"), VoteType.MOST_VOTES);
         this.mapVoteOptions = y.getInt("map-vote.options", 0);
         this.naturalMobs = y.getBoolean("natural-mobs", false);
