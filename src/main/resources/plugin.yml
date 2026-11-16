@@ -19,6 +19,10 @@ commands:
     description: Пати с друзьями (/p <ник> — пригласить)
     usage: /party help
     aliases: [p]
+  friend:
+    description: Друзья (/f <ник> — добавить)
+    usage: /friend help
+    aliases: [f, friends]
   pc:
     description: Чат пати
     usage: /pc <сообщение>

@@ -64,23 +64,46 @@ public final class PartyMenu extends Menu {
             set(17, Items.icon(Material.BARRIER, "<red>Покинуть пати", List.of("<gray>/p leave"), false), p -> { p.closeInventory(); ps.leave(p); });
         }
 
-        // ряды 3-6: кого пригласить
+        // ряды 3-6: сначала друзья в сети, потом остальные игроки, в конце друзья не в сети
+        set(10, Items.icon(Material.EMERALD, "<green>Друзья", List.of("<gray>/f — список, запросы, удаление"), false),
+                p -> new ru.mgp.friend.FriendsMenu(plugin, p).open(p));
+        var fs = plugin.friends();
+        UUID me = viewer.getUniqueId();
+        List<UUID> order = new ArrayList<>();
+        List<UUID> offlineFriends = new ArrayList<>();
+        for (UUID f : fs.sorted(me)) (Bukkit.getPlayer(f) != null ? order : offlineFriends).add(f);
+        List<Player> others = new ArrayList<>(Bukkit.getOnlinePlayers());
+        others.sort(java.util.Comparator.comparing(o -> o.getName().toLowerCase(java.util.Locale.ROOT)));
+        for (Player o : others) if (!fs.areFriends(me, o.getUniqueId())) order.add(o.getUniqueId());
+        order.addAll(offlineFriends);
         slot = 18;
-        if (leader) {
-            for (Player o : Bukkit.getOnlinePlayers()) {
-                if (slot >= 54) break;
-                if (o.equals(viewer) || (party != null && party.members().contains(o.getUniqueId()))) continue;
-                boolean invited = party != null && party.invites.containsKey(o.getUniqueId());
-                List<String> lore = new ArrayList<>();
-                lore.add(status(plugin, o));
-                lore.add("");
-                lore.add(invited ? "<gray>Приглашение отправлено" : "<green>Нажми — пригласить в пати");
-                set(slot++, head(o, "<white>" + Msg.esc(o.getName()), lore), invited ? null : p -> { p.closeInventory(); ps.invite(p, o); });
+        for (UUID u : order) {
+            if (slot >= 54) break;
+            if (u.equals(me) || (party != null && party.members().contains(u))) continue;
+            Player o = Bukkit.getPlayer(u);
+            boolean friend = fs.areFriends(me, u);
+            boolean invited = party != null && party.invites.containsKey(u);
+            String n = o != null ? o.getName() : PartyService.name(u);
+            List<String> lore = new ArrayList<>();
+            if (friend) lore.add("<green>★ Друг");
+            lore.add(o == null ? "<dark_gray>Не в сети" : status(plugin, o));
+            lore.add("");
+            if (o != null) {
+                if (!leader) lore.add("<gray>Приглашать может только лидер");
+                else lore.add(invited ? "<gray>Приглашение отправлено" : "<green>ЛКМ <gray>— пригласить в пати");
             }
-            if (slot == 18) set(31, Items.icon(Material.GRAY_DYE, "<gray>Больше никого нет в сети", List.of(), false), null);
-        } else {
-            set(31, Items.icon(Material.GRAY_DYE, "<gray>Приглашать может только лидер", List.of(), false), null);
+            if (!friend && o != null) lore.add(fs.hasOutgoing(me, u) ? "<gray>Запрос в друзья отправлен" : "<yellow>ПКМ <gray>— добавить в друзья");
+            setClick(slot++, ru.mgp.friend.FriendsMenu.head(u, (friend ? (o != null ? "<green>" : "<gray>") : "<white>") + Msg.esc(n), lore), (p, c) -> {
+                Player t = Bukkit.getPlayer(u);
+                if (t == null) return;
+                if (c.isRightClick() && !friend) { p.closeInventory(); fs.add(p, t); return; }
+                if (!c.isLeftClick() || invited) return;
+                if (!leader) { p.sendActionBar(Msg.parse("<red>Приглашать может только лидер пати")); return; }
+                p.closeInventory();
+                ps.invite(p, t);
+            });
         }
+        if (slot == 18) set(31, Items.icon(Material.GRAY_DYE, "<gray>Больше никого нет в сети", List.of("<gray>Добавь друзей: <yellow>/f add <ник>"), false), null);
     }
 
     private static String status(MGPPlugin plugin, Player p) {
