@@ -19,6 +19,8 @@ public final class GameSelectorMenu extends Menu {
             lore.add("");
             lore.add("<gray>Играют: <yellow>" + plugin.sessions().playersIn(m.id));
             lore.add("<gray>Игроков в матче: <yellow>" + m.minPlayers + "-" + m.maxPlayers);
+            long maps = plugin.registry().mapsFor(m.id).stream().filter(plugin.sessions()::playable).count();
+            lore.add(maps > 0 ? "<gray>Карт: <yellow>" + maps : "<red>Пока нет карт");
             lore.add("");
             lore.add("<green>▶ Нажми, чтобы играть");
             String id = m.id;
