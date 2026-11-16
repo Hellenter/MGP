@@ -103,19 +103,20 @@ public final class PlayerListener implements Listener {
     }
 
     /**
-     * Админ в хабе перешёл в креатив — убираем предметы режимов, чтобы не мешали строить.
-     * Вернулся из креатива — выдаём их снова (если не выключены через /mgp hotbar off).
+     * Админ в хабе перешёл в креатив или наблюдателя — убираем предметы режимов (мешают строить,
+     * а наблюдателю они не нужны). Вернулся в обычный режим — выдаём их снова
+     * (если не выключены через /mgp hotbar off).
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onGameMode(PlayerGameModeChangeEvent e) {
         Player p = e.getPlayer();
         if (plugin.sessions().of(p) != null) return;
         org.bukkit.GameMode to = e.getNewGameMode(), from = p.getGameMode();
-        if (to == org.bukkit.GameMode.CREATIVE) {
+        if (Hotbar.noHubItems(to)) {
             plugin.getServer().getScheduler().runTask(plugin, () -> { if (p.isOnline() && p.getGameMode() == to) Hotbar.clearTagged(p); });
-        } else if (from == org.bukkit.GameMode.CREATIVE && p.getWorld().equals(plugin.hub().world())) {
+        } else if (Hotbar.noHubItems(from) && p.getWorld().equals(plugin.hub().world())) {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (p.isOnline() && plugin.sessions().of(p) == null && p.getGameMode() != org.bukkit.GameMode.CREATIVE) Hotbar.giveHub(p);
+                if (p.isOnline() && plugin.sessions().of(p) == null && !Hotbar.noHubItems(p.getGameMode())) Hotbar.giveHub(p);
             });
         }
     }
