@@ -132,6 +132,36 @@ public final class GameListener implements Listener {
         if (s != null && s.isPlaying()) s.logic().onFlow(e);
     }
 
+    /**
+     * Огонь в мирах MGP не уничтожает карту: блоки не сгорают, пламя не перекидывается и не возникает
+     * от лавы/молнии. Поджечь зажигалкой можно (игроков это жжёт), но постройка останется целой.
+     * Вернуть ванильный огонь в режиме: settings.fire-spread: true.
+     */
+    private boolean fireProtected(org.bukkit.World w) {
+        GameSession s = plugin.sessions().byWorld(w);
+        if (s != null) return !s.mode.settings.getBoolean("fire-spread", false);
+        return w.getName().startsWith(ru.mgp.world.WorldService.PREFIX);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBurn(org.bukkit.event.block.BlockBurnEvent e) {
+        if (fireProtected(e.getBlock().getWorld())) e.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onIgnite(org.bukkit.event.block.BlockIgniteEvent e) {
+        var cause = e.getCause();
+        if (cause == org.bukkit.event.block.BlockIgniteEvent.IgniteCause.FLINT_AND_STEEL
+                || cause == org.bukkit.event.block.BlockIgniteEvent.IgniteCause.FIREBALL
+                || cause == org.bukkit.event.block.BlockIgniteEvent.IgniteCause.ARROW) return;
+        if (fireProtected(e.getBlock().getWorld())) e.setCancelled(true);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onFireSpread(org.bukkit.event.block.BlockSpreadEvent e) {
+        if (e.getSource().getType() == org.bukkit.Material.FIRE && fireProtected(e.getBlock().getWorld())) e.setCancelled(true);
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent e) {
         GameSession s = plugin.sessions().byWorld(e.getLocation().getWorld());
