@@ -87,6 +87,8 @@ public final class MapImporter {
         boolean scan = r.detectChests() && !r.lobby() && (mode == null || mode.chestLoot());
         Map<String, String> tiers = chestTiers();
         Map<String, String> markers = mode != null ? mode.lootMarkers : ru.mgp.config.ModeConfig.DEFAULT_MARKERS;
+        // auto-chests: false (штурм) — только контейнеры с маркерами, без запасного «по типу блока»
+        boolean byType = mode == null || mode.settings.getBoolean("auto-chests", true);
         int padding = Math.max(0, plugin.getConfig().getInt("import.optimize-padding", 2));
         CompletableFuture.completedFuture(null).whenComplete((ignored, ex) -> {
             w.save(true); // сбросить изменения на диск перед копированием файлов
@@ -120,7 +122,8 @@ public final class MapImporter {
                     if (scan) {
                         // есть сундуки с маркерами (железный/золотой слиток) — только они, иначе по типу блока
                         var found = ChestScanner.scan(RegionCutter.findOverworldDir(dst), fbox.minX(), fbox.minZ(), fbox.maxX(), fbox.maxZ());
-                        for (ChestScanner.Tiered t : ChestScanner.tiers(found, markers, tiers))
+                        var tiered = byType ? ChestScanner.tiers(found, markers, tiers) : ChestScanner.marked(found, markers);
+                        for (ChestScanner.Tiered t : tiered)
                             chests.add(t.x() + " " + t.y() + " " + t.z() + " " + t.tier());
                         Collections.sort(chests);
                     }

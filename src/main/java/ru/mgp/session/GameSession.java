@@ -410,6 +410,20 @@ public final class GameSession {
                 }
                 autoChests.addAll(spots);
                 fillChests(null);
+                if (mode.settings.getBoolean("empty-unmarked", false)) {
+                    // остальные сундуки, бочки и шалкеры карты — пустые (декорации, забытые вещи строителей)
+                    java.util.Set<String> crates = new java.util.HashSet<>(filledChests.keySet());
+                    int n = 0;
+                    for (var f : found) {
+                        if (!ru.mgp.world.ChestScanner.isStorage(f.type())) continue;
+                        String key = f.x() + " " + f.y() + " " + f.z();
+                        if (crates.contains(key)) continue;
+                        filledChests.put(key, "-");
+                        Inventory inv = storageAt(f.x(), f.y(), f.z());
+                        if (inv != null && !inv.isEmpty()) { inv.clear(); n++; }
+                    }
+                    if (n > 0) plugin.getLogger().info("Карта " + m.id + ": очищено контейнеров без маркера: " + n);
+                }
             });
         });
     }
@@ -455,9 +469,14 @@ public final class GameSession {
         if (tier == null && !markersOnMap && map.chests.isEmpty() && mode.settings.getBoolean("auto-chests", true)) {
             tier = chestTiers().get(l.getBlock().getType().name());
         }
-        if (tier == null) return;
-        LootTable table = mode.loot.get(tier);
-        if (table == null) return;
+        LootTable table = tier == null ? null : mode.loot.get(tier);
+        if (table == null) {
+            if (mode.settings.getBoolean("empty-unmarked", false) && ru.mgp.world.ChestScanner.isStorage(l.getBlock().getType().name())) {
+                filledChests.put(key, "-");
+                inv.clear();
+            }
+            return;
+        }
         filledChests.put(key, tier);
         table.fill(inv, random);
     }
@@ -699,15 +718,25 @@ public final class GameSession {
         filledChests.values().removeIf(t -> onlyTier == null || onlyTier.equalsIgnoreCase(t));
         for (MapConfig.ChestSpot c : spots) {
             if (onlyTier != null && !onlyTier.equalsIgnoreCase(c.tier())) continue;
-            filledChests.put(c.pos().bx() + " " + c.pos().by() + " " + c.pos().bz(), c.tier());
             LootTable table = mode.loot.get(c.tier());
             if (table == null) {
                 plugin.getLogger().warning("Нет таблицы лута '" + c.tier() + "' в режиме " + mode.id);
                 continue;
             }
+            filledChests.put(c.pos().bx() + " " + c.pos().by() + " " + c.pos().bz(), c.tier());
+            nameContainer(c.pos().bx(), c.pos().by(), c.pos().bz(), table);
             Inventory inv = storageAt(c.pos().bx(), c.pos().by(), c.pos().bz());
             if (inv != null) table.fill(inv, random);
         }
+    }
+
+    /** Имя контейнера из title таблицы лута («Оружейный ящик» в заголовке окна). Ставим до заполнения: update() пишет и снимок инвентаря. */
+    private void nameContainer(int x, int y, int z, LootTable table) {
+        if (table.title() == null) return;
+        BlockState st = gameWorld.getBlockAt(x, y, z).getState();
+        if (!(st instanceof Container c)) return;
+        c.customName(Msg.parse(table.title()));
+        st.update(true, false);
     }
 
     private void spawnTraders() {

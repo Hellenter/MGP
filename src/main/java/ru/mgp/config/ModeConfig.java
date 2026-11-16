@@ -121,7 +121,11 @@ public final class ModeConfig {
                 int[] amount = Cfg.range(m.get("amount"), spec.amount, spec.amount);
                 entries.add(new LootTable.Entry(spec, Cfg.integer(m, "weight", 1), amount[0], amount[1]));
             }
-            loot.put(tier, new LootTable(tier, rolls[0], rolls[1], entries, limits));
+            List<LootTable.Preset> presets = new ArrayList<>();
+            for (Map<?, ?> raw : t.getMapList("presets")) presets.add(preset(Cfg.asMap(raw), presets.size() + 1));
+            String title = t.getString("title");
+            loot.put(tier, new LootTable(tier, rolls[0], rolls[1], entries, limits, presets,
+                    title == null || title.isBlank() ? null : title));
         }
 
         ConfigurationSection ts = y.getConfigurationSection("trades");
@@ -158,6 +162,50 @@ public final class ModeConfig {
         } else {
             lootMarkers.putAll(DEFAULT_MARKERS);
         }
+    }
+
+    /**
+     * Раскладка ящика (loot.<тип>.presets): name, weight и slots — слот -> предмет.
+     * Слот: номер (11), диапазон ("10-13") или список ("10,12,14") — один и тот же предмет в каждый.
+     * Предмет: строка как везде ("GUN m16", "AMMO rifle 64", "TNT 8") или { item: "...", amount: 32-64 }.
+     * slots может быть и просто списком предметов — тогда они идут в слоты 0, 1, 2...
+     */
+    private static LootTable.Preset preset(Map<String, Object> m, int n) {
+        Map<Integer, LootTable.Slot> slots = new TreeMap<>();
+        Object raw = m.get("slots");
+        if (raw instanceof List<?> list) {
+            for (Object o : list) slots.put(slots.size(), slot(o));
+        } else {
+            Map<String, Object> sm = Cfg.asMap(raw);
+            if (sm != null) for (Map.Entry<String, Object> e : sm.entrySet()) {
+                LootTable.Slot s = slot(e.getValue());
+                for (int i : slotNumbers(e.getKey())) slots.put(i, s);
+            }
+        }
+        return new LootTable.Preset(Cfg.str(m, "name", "#" + n), Cfg.integer(m, "weight", 1), slots);
+    }
+
+    private static LootTable.Slot slot(Object o) {
+        Map<String, Object> m = Cfg.asMap(o);
+        ItemSpec spec = ItemSpec.parse(m != null && m.get("item") != null ? m.get("item") : o);
+        int[] amount = Cfg.range(m != null && m.get("item") != null ? m.get("amount") : null, spec.amount, spec.amount);
+        return new LootTable.Slot(spec, amount[0], amount[1]);
+    }
+
+    private static List<Integer> slotNumbers(String key) {
+        List<Integer> out = new ArrayList<>();
+        for (String part : key.split(",")) {
+            String p = part.trim();
+            if (p.isEmpty()) continue;
+            int dash = p.indexOf('-', 1);
+            if (dash > 0) {
+                int a = Integer.parseInt(p.substring(0, dash).trim()), b = Integer.parseInt(p.substring(dash + 1).trim());
+                for (int i = Math.min(a, b); i <= Math.max(a, b); i++) out.add(i);
+            } else {
+                out.add(Integer.parseInt(p));
+            }
+        }
+        return out;
     }
 
     /**

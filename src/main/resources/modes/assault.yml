@@ -48,6 +48,129 @@ start-items:
 win-actions:
   - "message: <gold>Победа в штурме!"
 
+# ===================== ВОЕННЫЕ ЯЩИКИ =====================
+# Тип ящика задаёт предмет-маркер: строитель кладёт в сундук/бочку/шалкер ОДИН вид предметов из списка ниже
+# (например, железный слиток) — при старте игры содержимое заменяется одной из раскладок этого типа.
+# Раскладка выбирается случайно по weight, но предметы всегда лежат в своих слотах (как в настоящем «цинке»).
+# Остальные контейнеры карты пустые (settings.empty-unmarked). Двойной сундук — это два ящика: маркер в каждой половине.
+#
+# Слоты сундука/бочки: 0-8 верхний ряд, 9-17 средний, 18-26 нижний (центр — 13).
+# Слот: номер (13), диапазон ("10-16") или список ("10,12,14,16"). Предмет — как в магазинах:
+#   "GUN m16", "AMMO rifle 64", "TNT 8", "EXPLOSIVE_ARROW 8", { item: "AMMO rifle", amount: 32-64 }, { item: {material: ..., name: ...} }
+# Оружие и патроны — guns.yml. title — заголовок окна ящика.
+loot-markers:
+  IRON_INGOT: weapons_t1             # оружие, тир 1 — пистолеты и ПП
+  GOLD_INGOT: weapons_t2             # оружие, тир 2 — автоматы и дробовик
+  DIAMOND: weapons_special           # спецоружие — пулемёт, снайперки, гранатомёты
+  COPPER_INGOT: ammo                 # патроны
+  GUNPOWDER: explosives              # взрывчатка
+  BRICK: building                    # застройка
+  GLISTERING_MELON_SLICE: medical    # медикаменты
+loot:
+  weapons_t1:
+    title: "<dark_green>Оружейный ящик · T1"
+    presets:
+      - { name: "3 × P30", weight: 4, slots: { "11,13,15": "GUN p30" } }
+      - { name: "2 × Desert Eagle", weight: 2, slots: { "12,14": "GUN deagle" } }
+      - { name: "3 × MP5", weight: 3, slots: { "11,13,15": "GUN mp5" } }
+      - { name: "3 × Uzi", weight: 3, slots: { "11,13,15": "GUN uzi" } }
+      - { name: "2 × ППШ-41", weight: 2, slots: { "12,14": "GUN ppsh41" } }
+      - name: "P30 + MP5 с патронами"
+        weight: 2
+        slots:
+          11: "GUN p30"
+          13: "GUN mp5"
+          "15-16": "AMMO pistol 32"
+  weapons_t2:
+    title: "<dark_green>Оружейный ящик · T2"
+    presets:
+      - { name: "3 × M16", weight: 3, slots: { "11,13,15": "GUN m16" } }
+      - { name: "3 × АК-47", weight: 3, slots: { "11,13,15": "GUN ak47" } }
+      - { name: "2 × M4A1", weight: 2, slots: { "12,14": "GUN m4a1s" } }
+      - { name: "2 × FAMAS", weight: 2, slots: { "12,14": "GUN famas" } }
+      - { name: "2 × АС «Вал»", weight: 1, slots: { "12,14": "GUN asval" } }
+      - { name: "2 × SPAS-12", weight: 2, slots: { "12,14": "GUN spas" } }
+  weapons_special:
+    title: "<dark_red>Ящик спецвооружения"
+    presets:
+      - { name: "ПКП", weight: 2, slots: { 13: "GUN pkp" } }
+      - { name: "СВД", weight: 2, slots: { 13: "GUN dragunov" } }
+      - { name: "AWP", weight: 1, slots: { 13: "GUN awp" } }
+      - { name: "2 × Kar98k", weight: 2, slots: { "12,14": "GUN kar98k" } }
+      - { name: "AA-12", weight: 1, slots: { 13: "GUN aa12" } }
+      - name: "M79 + 8 гранат"
+        weight: 1
+        slots:
+          12: "GUN m79"
+          14: "EXPLOSIVE_ARROW 8"
+      - name: "РПГ-7 + 2 выстрела"
+        weight: 1
+        slots:
+          12: "GUN rpg"
+          14: "AMMO rpg 2"
+  ammo:
+    title: "<gold>Цинк с патронами"
+    presets:
+      - { name: "4 × винтовочные", weight: 2, slots: { "10,12,14,16": "AMMO rifle 64" } }
+      - { name: "4 × промежуточные", weight: 3, slots: { "10,12,14,16": "AMMO intermediate 64" } }
+      - { name: "4 × пистолетные", weight: 3, slots: { "10,12,14,16": "AMMO pistol 64" } }
+      - { name: "3 × картечь", weight: 2, slots: { "11,13,15": "AMMO shotgun 32" } }
+      - name: "Сборный"
+        weight: 2
+        slots:
+          10: "AMMO pistol 64"
+          12: "AMMO intermediate 64"
+          14: "AMMO rifle 32"
+          16: "AMMO shotgun 16"
+  explosives:
+    title: "<red>Ящик взрывчатки"
+    presets:
+      - { name: "ТНТ", weight: 3, slots: { "11,13,15": "TNT 8" } }
+      - { name: "Разрывные стрелы", weight: 2, slots: { "12,14": "EXPLOSIVE_ARROW 8" } }
+      - { name: "Выстрелы РПГ", weight: 1, slots: { "12,14": "AMMO rpg 2" } }
+      - name: "Сапёрный"
+        weight: 2
+        slots:
+          11: "TNT 8"
+          13: "EXPLOSIVE_ARROW 8"
+          15: "FLINT_AND_STEEL"
+  building:
+    title: "<yellow>Ящик для застройки"
+    presets:
+      - name: "Доски и лестницы"
+        weight: 3
+        slots:
+          "10-12": "OAK_PLANKS 64"
+          14: "LADDER 16"
+          16: "OAK_FENCE 32"
+      - name: "Мешки с песком"
+        weight: 2
+        slots:
+          "10-14": "BROWN_WOOL 64"
+          16: "SCAFFOLDING 32"
+      - name: "Леса и лестницы"
+        weight: 2
+        slots:
+          "11,13": "SCAFFOLDING 64"
+          15: "LADDER 32"
+  medical:
+    title: "<green>Ящик медикаментов"
+    presets:
+      - name: "Аптечки"
+        weight: 3
+        slots:
+          "11,13,15": { item: { material: GOLDEN_APPLE, name: "<red>Аптечка" }, amount: 2 }
+      - name: "Сухпаёк"
+        weight: 3
+        slots:
+          "10,12,14,16": "COOKED_BEEF 16"
+          22: "GOLDEN_APPLE 1"
+      - name: "Полевой госпиталь"
+        weight: 1
+        slots:
+          13: "ENCHANTED_GOLDEN_APPLE 1"
+          "11,15": { item: { material: GOLDEN_APPLE, name: "<red>Аптечка" }, amount: 2 }
+
 # Плейсхолдеры: {team} {stage} (1/3) {stage_name} {phase} {time} {money} {objectives} (1/2)
 #               {objectives_progress} (проценты целей стадии) {attackers} {defenders} {limbo}
 sidebar:
@@ -88,7 +211,9 @@ settings:
       rpg:                       # ракета РПГ-7 (guns.yml → rpg, explosion: rpg)
         power: 3.5
         self-damage: 0.5
-  empty-chests: true             # сундуки карты пустые
+  chest-loot: true               # военные ящики (loot выше): контейнеры с предметом-маркером
+  auto-chests: false             # без маркера контейнер не заполняется (никакого «по типу блока»)
+  empty-unmarked: true           # остальные сундуки, бочки и шалкеры карты пустые
   defender-ratio: 0.5            # доля защитников (пати остаются в одной команде)
   prep-time: "1:00"              # подготовка перед первой стадией: закупка, зоны команд закрыты, PvP и взрывов нет
   stage-time: "15:00"            # время стадии, если у стадии в карте не задано своё time
