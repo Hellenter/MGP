@@ -1,10 +1,10 @@
 #!/bin/sh
-# Перерисовать текстуры (Python 3 + Pillow) и пересобрать packs/assault-tools.zip.
+# Пересобрать packs/assault-tools.zip. Нужны Python 3 + Pillow и клиент Minecraft (jar) для ванильных силуэтов:
+#   ./build.sh ~/.minecraft/versions/26.3/26.3.jar
 set -e
 cd "$(dirname "$0")"
 OUT=assets/minecraft/textures/item
-for s in axe pick shovel; do (cd src && python3 "$s.py" >/dev/null); done
-mv -f src/diamond_*.png "$OUT/"
+[ -n "$1" ] && python3 src/recolor.py "$1" "$OUT"
 rm -f ../assault-tools.zip
 # фиксированные даты, чтобы SHA-1 не менялся от пересборки
 find pack.mcmeta assets -exec touch -t 202601010000 {} +
