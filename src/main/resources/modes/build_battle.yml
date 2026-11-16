@@ -1,4 +1,8 @@
 # ===================== БИЛД БАТТЛ =====================
+# Карта: участки (/mgp setup plot), стены между ними (/mgp setup wall <карта> auto), центр арены (/mgp setup arena).
+# Время стройки вышло — стены исчезают, все в центре арены смотрят на постройки (reveal-time),
+# потом всех по очереди переносит на каждый участок: оценка блоками от красного к зелёному.
+# Авторы построек не называются до самого конца — в итогах ники и очки появляются над каждой постройкой.
 type: build_battle
 display-name: "<light_purple><bold>Билд баттл"
 icon: BRICKS
@@ -7,11 +11,11 @@ description:
   - "<gray>и набери больше всех оценок!"
 
 min-players: 2
-max-players: 12                    # не больше, чем участков на картах
+max-players: 4                     # не больше, чем участков на картах (лишние игроки только смотрят)
 max-sessions: 4
 countdown: 45
 fast-countdown: 10
-end-delay: 10
+end-delay: 15                      # сколько смотреть на итоги над постройками
 time-limit: 0                      # у билд баттла свои таймеры фаз (settings)
 
 waiting:
@@ -70,16 +74,18 @@ sidebar:
 settings:
   disable-hunger: true
   build-time: "5:00"
+  reveal-time: 10                  # сек. в центре арены после стройки (стены уже исчезли)
   judge-time: 15                   # секунд на оценку одной постройки
   plot-margin: 3                   # насколько можно отлететь за границу участка
   theme-options: 5                 # сколько тем выставить на голосование
   theme-vote: MOST_VOTES           # MOST_VOTES | RANDOM_VOTED | WEIGHTED | NONE
   themes: [Замок, Корабль, Дракон, Пицца, Космос, Дерево, Робот, Пиратский остров, Кафе, Вулкан]
   banned-items: [TNT, WITHER_SKELETON_SKULL, END_CRYSTAL, LAVA_BUCKET, ENDER_DRAGON_SPAWN_EGG, WITHER_SPAWN_EGG]
+  # Оценки: блоки в хотбаре от красного к зелёному, ПКМ — поставить (можно поменять, пока идёт время)
   grades:
-    - { name: "<dark_red>Ужасно",   material: RED_TERRACOTTA,    points: 1 }
-    - { name: "<red>Плохо",         material: ORANGE_TERRACOTTA, points: 2 }
-    - { name: "<yellow>Нормально",  material: YELLOW_TERRACOTTA, points: 3 }
-    - { name: "<green>Хорошо",      material: LIME_TERRACOTTA,   points: 4 }
-    - { name: "<dark_green>Отлично", material: GREEN_TERRACOTTA, points: 5 }
-    - { name: "<gold><bold>Шедевр",  material: GOLD_BLOCK,       points: 6 }
+    - { name: "<dark_red>Ужасно",          material: RED_CONCRETE,     points: 1 }
+    - { name: "<red>Плохо",                material: ORANGE_CONCRETE,  points: 2 }
+    - { name: "<gold>Так себе",            material: YELLOW_CONCRETE,  points: 3 }
+    - { name: "<yellow>Нормально",         material: LIME_TERRACOTTA,  points: 4 }
+    - { name: "<green>Хорошо",             material: LIME_CONCRETE,    points: 5 }
+    - { name: "<dark_green><bold>Отлично", material: GREEN_CONCRETE,   points: 6 }

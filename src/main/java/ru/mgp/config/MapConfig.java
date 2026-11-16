@@ -65,6 +65,10 @@ public final class MapConfig {
     public final List<TraderSpot> traders = new ArrayList<>();
     public final List<Trigger> triggers = new ArrayList<>();
     public final List<Plot> plots = new ArrayList<>();
+    /** Билд баттл: стены между участками (исчезают, когда время стройки вышло). */
+    public final List<Region> walls = new ArrayList<>();
+    /** Билд баттл: центр арены, куда переносит всех после стройки и в конце (по умолчанию spectator). */
+    public final Pos arena;
     public final List<Script> scripts = new ArrayList<>();
 
     public boolean playableIn(String modeId) {
@@ -87,6 +91,7 @@ public final class MapConfig {
         for (String s : y.getStringList("spawns")) spawns.add(Pos.parse(s));
         this.spectator = Pos.parse(y.getString("spectator"));
         this.center = Pos.parse(y.getString("center"));
+        this.arena = Pos.parse(y.getString("arena"));
         String bi = y.getString("biome");
         this.biome = bi == null || bi.isBlank() || bi.equalsIgnoreCase("none") ? null : bi.trim().toLowerCase(java.util.Locale.ROOT);
         org.bukkit.configuration.ConfigurationSection gr = y.getConfigurationSection("gamerules");
@@ -146,6 +151,11 @@ public final class MapConfig {
             Map<String, Object> m = Cfg.asMap(raw);
             plots.add(new Plot(Region.of(Pos.parse(Cfg.str(m, "min", null)), Pos.parse(Cfg.str(m, "max", null))),
                     Pos.parse(Cfg.str(m, "spawn", null))));
+        }
+        for (Map<?, ?> raw : y.getMapList("walls")) {
+            Map<String, Object> m = Cfg.asMap(raw);
+            Pos a = Pos.parse(Cfg.str(m, "min", null)), b = Pos.parse(Cfg.str(m, "max", null));
+            if (a != null && b != null) walls.add(Region.of(a, b));
         }
     }
 

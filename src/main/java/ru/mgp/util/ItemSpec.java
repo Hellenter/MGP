@@ -15,6 +15,7 @@ import java.util.*;
  *   "IRON_SWORD"   |   "ARROW 16"
  *   {material: DIAMOND_SWORD, amount: 1, name: "<aqua>Меч", lore: [...], enchants: {sharpness: 2}, unbreakable: true, slot: head}
  * slot: head/chest/legs/feet/offhand или номер слота 0-35.
+ * data: предмет целиком (зачарования, имя, компоненты) в Base64 — так сохраняет /mgp kit save; material и amount рядом для наглядности.
  */
 public final class ItemSpec {
     public final Material material;
@@ -24,9 +25,17 @@ public final class ItemSpec {
     public final Map<String, Integer> enchants;
     public final boolean unbreakable;
     public final String slot;
+    /** Предмет целиком (ItemStack.serializeAsBytes в Base64) или null. */
+    public final String data;
 
     private ItemSpec(Material material, int amount, String name, List<String> lore,
                      Map<String, Integer> enchants, boolean unbreakable, String slot) {
+        this(material, amount, name, lore, enchants, unbreakable, slot, null);
+    }
+
+    private ItemSpec(Material material, int amount, String name, List<String> lore,
+                     Map<String, Integer> enchants, boolean unbreakable, String slot, String data) {
+        this.data = data == null || data.isBlank() ? null : data.trim();
         this.material = material;
         this.amount = amount;
         this.name = name;
@@ -51,13 +60,34 @@ public final class ItemSpec {
         Map<String, Integer> ench = new LinkedHashMap<>();
         Map<String, Object> em = Cfg.asMap(m.get("enchants"));
         if (em != null) em.forEach((k, v) -> ench.put(k.toLowerCase(Locale.ROOT), Integer.parseInt(String.valueOf(v))));
+        Object slot = m.get("slot");
         return new ItemSpec(mat, Cfg.integer(m, "amount", 1), (String) m.get("name"),
-                Cfg.strings(m.get("lore")), ench, Cfg.bool(m, "unbreakable", false), (String) m.get("slot"));
+                Cfg.strings(m.get("lore")), ench, Cfg.bool(m, "unbreakable", false), slot == null ? null : String.valueOf(slot),
+                (String) m.get("data"));
+    }
+
+    /** Запись предмета для yml: slot, material, amount и сам предмет целиком (data). */
+    public static Map<String, Object> toMap(ItemStack it, String slot) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("slot", slot);
+        m.put("material", it.getType().name());
+        m.put("amount", it.getAmount());
+        m.put("data", Base64.getEncoder().encodeToString(it.serializeAsBytes()));
+        return m;
     }
 
     public ItemStack build() { return build(amount); }
 
     public ItemStack build(int count) {
+        if (data != null) {
+            try {
+                ItemStack it = ItemStack.deserializeBytes(Base64.getDecoder().decode(data));
+                if (count != amount) it.setAmount(Math.max(1, count));
+                return it;
+            } catch (Exception e) {
+                // повреждённые данные — собираем по material/amount ниже
+            }
+        }
         ItemStack stack = new ItemStack(material, Math.max(1, count));
         ItemMeta meta = stack.getItemMeta();
         if (meta == null) return stack;

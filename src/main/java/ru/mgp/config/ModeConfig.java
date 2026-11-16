@@ -31,6 +31,8 @@ public final class ModeConfig {
     public final List<ModifierGroup> modifiers = new ArrayList<>();
     public final Map<String, Kit> kits = new LinkedHashMap<>();
     public final String defaultKit;
+
+    private static String blank(String s) { return s == null || s.isBlank() || s.equalsIgnoreCase("all") ? null : s.trim(); }
     public final List<ItemSpec> startItems = new ArrayList<>();
     public final Map<String, LootTable> loot = new LinkedHashMap<>();
     public final Map<String, List<TradeSpec>> trades = new LinkedHashMap<>();
@@ -94,7 +96,8 @@ public final class ModeConfig {
             List<ItemSpec> items = new ArrayList<>();
             for (Object o : k.getList("items", List.of())) items.add(ItemSpec.parse(o));
             kits.put(kid, new Kit(kid, k.getString("display", kid), Cfg.material(k.getString("icon"), Material.CHEST),
-                    k.getString("permission"), k.getStringList("description"), items, k.getStringList("actions")));
+                    k.getString("permission"), k.getStringList("description"), items, k.getStringList("actions"),
+                    blank(k.getString("team"))));
         }
 
         for (Object o : y.getList("start-items", List.of())) startItems.add(ItemSpec.parse(o));

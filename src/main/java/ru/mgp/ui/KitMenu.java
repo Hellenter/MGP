@@ -10,6 +10,16 @@ import java.util.List;
 
 /** Выбор набора в лобби ожидания. */
 public final class KitMenu extends Menu {
+    private static String teamName(String t) {
+        return switch (t.toLowerCase(java.util.Locale.ROOT)) {
+            case "defenders" -> "защитников";
+            case "attackers" -> "атакующих";
+            case "seeker", "seekers" -> "ищущих";
+            case "hider", "hiders" -> "прячущихся";
+            default -> t;
+        };
+    }
+
     public KitMenu(GameSession s, Player viewer) {
         super(rowsFor(s.mode.kits.size()), "<dark_gray>Наборы");
         String current = s.kitOf(viewer.getUniqueId());
@@ -17,6 +27,7 @@ public final class KitMenu extends Menu {
         for (Kit k : s.mode.kits.values()) {
             boolean allowed = k.permission() == null || viewer.hasPermission(k.permission());
             List<String> lore = new ArrayList<>(k.description());
+            if (k.team() != null) lore.add("<gray>Только для команды <white>" + teamName(k.team()));
             lore.add("");
             if (k.id().equals(current)) lore.add("<green>✔ Выбран");
             else lore.add(allowed ? "<yellow>Нажми, чтобы выбрать" : "<red>Недоступно");

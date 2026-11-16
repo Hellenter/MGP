@@ -106,6 +106,11 @@ public final class MgpCommand implements TabExecutor {
                     new ru.mgp.shop.ShopEditMenu(plugin.shops(), sh, 0).open(p);
                 } else new ru.mgp.shop.ShopListMenu(plugin.shops()).open(p);
             }
+            case "kit", "kits" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                try { KitCommands.handle(plugin, p, a); } catch (IllegalArgumentException e) { Msg.send(p, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
+            }
             case "wand" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -203,6 +208,7 @@ public final class MgpCommand implements TabExecutor {
             Msg.send(s, "<gold>/mgp setup</gold> — список команд настройки карт");
             Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
             Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
+            Msg.send(s, "<gold>/mgp kit save <режим> <id> [команда]</gold> — сохранить свой инвентарь как набор режима (слоты, броня); <gold>kit list|load|delete</gold>");
             Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
             Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
             Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
@@ -240,7 +246,9 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
                     "<yellow>/mgp setup rename <карта> <новый id> [название]</yellow> — переименовать карту",
                     "<yellow>/mgp setup name <карта> <название></yellow> — только название для игроков (MiniMessage, например <green>Джунгли)",
-                    "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты",
+                    "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты; <yellow>plots <карта></yellow> — список, <yellow>delplot <карта> <n></yellow>",
+                    "<yellow>/mgp setup wall <карта> [auto [зазор]|clear]</yellow> — стены между участками (исчезают после стройки); <yellow>arena <карта></yellow> — центр арены",
+                    "<yellow>/mgp setup show <карта> [сек]</yellow> — подсветить участки, стены и центр арены частицами",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
                     "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
@@ -440,7 +448,44 @@ public final class MgpCommand implements TabExecutor {
                         m.put("max", sel[1].serialize());
                         m.put("spawn", Pos.of(loc).serialize());
                         addMap(y, "plots", m);
-                    }, "Участок добавлен");
+                    }, "Участок " + (plugin.registry().map(a[1]) == null ? "" : "№" + (plugin.registry().map(a[1]).plots.size() + 1) + " ")
+                            + "добавлен. Стены между участками: /mgp setup wall " + a[1] + " auto");
+                }
+                case "plots" -> listPlots(p, a);
+                case "delplot" -> {
+                    need(a, 3);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    int n = Integer.parseInt(a[2]);
+                    if (n < 1 || n > m.plots.size()) { Msg.send(p, "<red>Нет участка №" + n + " (всего " + m.plots.size() + ")"); return; }
+                    edit(p, a, 3, y -> {
+                        List<Map<?, ?>> l = new ArrayList<>(y.getMapList("plots"));
+                        l.remove(n - 1);
+                        y.set("plots", l);
+                    }, "Участок №" + n + " удалён");
+                }
+                case "tpplot" -> {
+                    need(a, 3);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    int n = Integer.parseInt(a[2]);
+                    if (n < 1 || n > m.plots.size()) { Msg.send(p, "<red>Нет участка №" + n); return; }
+                    MapConfig.Plot pl = m.plots.get(n - 1);
+                    Pos at = pl.spawn() != null ? pl.spawn() : pl.region().min();
+                    p.teleport(at.toLocation(mapWorld(p, m)));
+                }
+                case "arena" -> edit(p, a, 2, y -> y.set("arena", Pos.of(loc).serialize()),
+                        "Центр арены задан: сюда всех перенесёт, когда время стройки выйдет, и в конце игры");
+                case "wall" -> setupWalls(p, a);
+                case "show" -> {
+                    need(a, 2);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    int sec = a.length > 2 ? Math.max(1, Math.min(300, Integer.parseInt(a[2]))) : 30;
+                    org.bukkit.World w = mapWorld(p, m);
+                    if (!p.getWorld().equals(w)) { Msg.send(p, "<red>Карта " + m.id + " в мире " + w.getName() + " — перейди туда"); return; }
+                    PlotSetup.show(plugin, p, w, m, sec);
+                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>");
                 }
                 case "trigger" -> {
                     need(a, 3);
@@ -483,7 +528,8 @@ public final class MgpCommand implements TabExecutor {
                     Msg.send(p, "<gold>" + m.id + "</gold> режимы=" + m.mode + (m.alsoModes.isEmpty() ? "" : ", " + String.join(", ", m.alsoModes)) + " шаблон=" + m.template
                             + (plugin.worlds().templateExists(m.template) ? " <green>✔" : " <red>(шаблона нет!)"));
                     Msg.send(p, "<gray>спавнов " + m.spawns.size() + ", сундуков " + m.chests.size() + ", торговцев "
-                            + m.traders.size() + ", триггеров " + m.triggers.size() + ", участков " + m.plots.size());
+                            + m.traders.size() + ", триггеров " + m.triggers.size() + ", участков " + m.plots.size()
+                            + (m.plots.isEmpty() ? "" : ", стен " + m.walls.size() + (m.arena != null ? ", центр арены задан" : ", центр арены не задан")));
                     listSpawns(p, a);
                 }
                 default -> setup(p, new String[0]);
@@ -850,6 +896,65 @@ public final class MgpCommand implements TabExecutor {
         }
     }
 
+    // ------------------------------------------------------------------ билд баттл: участки и стены
+
+    private void listPlots(Player p, String[] a) {
+        need(a, 2);
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        if (m.plots.isEmpty()) { Msg.send(p, "<gray>Участков нет. Выдели участок (pos1/pos2), встань на его спавн: /mgp setup plot " + m.id); return; }
+        Msg.send(p, "<gold>Участки " + m.id + " (" + m.plots.size() + "):");
+        for (int i = 0; i < m.plots.size(); i++) {
+            ru.mgp.util.Region r = m.plots.get(i).region();
+            p.sendMessage(Msg.parse(String.format(Locale.ROOT,
+                    "<gray>%d.</gray> <white>%d×%d×%d</white> <dark_gray>(%d %d %d … %d %d %d)</dark_gray> "
+                            + "<aqua><click:run_command:'/mgp setup tpplot %s %d'><hover:show_text:'Телепорт на спавн участка'>[тп]</hover></click></aqua> "
+                            + "<red><click:suggest_command:'/mgp setup delplot %s %d'><hover:show_text:'Удалить участок'>[x]</hover></click></red>",
+                    i + 1, r.maxX() - r.minX() + 1, r.maxY() - r.minY() + 1, r.maxZ() - r.minZ() + 1,
+                    r.minX(), r.minY(), r.minZ(), r.maxX(), r.maxY(), r.maxZ(), m.id, i + 1, m.id, i + 1)));
+        }
+        Msg.send(p, "<gray>Стен: <white>" + m.walls.size() + "</white>, центр арены: " + (m.arena != null ? "<white>" + m.arena.serialize() : "<red>не задан (/mgp setup arena " + m.id + ")"));
+        p.sendMessage(Msg.parse("<aqua><click:run_command:'/mgp setup show " + m.id + "'>[показать частицами]</click></aqua>"));
+    }
+
+    /** /mgp setup wall <карта> — стена из выделения; auto [зазор] — найти стены между участками; clear — убрать все. */
+    private void setupWalls(Player p, String[] a) {
+        need(a, 2);
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        String mode = a.length > 2 ? a[2].toLowerCase(Locale.ROOT) : "";
+        if (mode.equals("clear")) { edit(p, a, 2, y -> y.set("walls", null), "Все стены карты убраны из настроек (блоки на карте не тронуты)"); return; }
+        if (mode.equals("auto")) {
+            if (m.plots.size() < 2) { Msg.send(p, "<red>Сначала задай участки: /mgp setup plot " + m.id); return; }
+            int maxGap = a.length > 3 ? Math.max(1, Integer.parseInt(a[3])) : 5;
+            org.bukkit.World w = mapWorld(p, m);
+            PlotSetup.AutoResult res = PlotSetup.autoWalls(w, m.plots, maxGap);
+            edit(p, a, 2, y -> {
+                List<Map<String, Object>> l = new ArrayList<>();
+                for (ru.mgp.util.Region r : res.walls()) {
+                    Map<String, Object> mm = new LinkedHashMap<>();
+                    mm.put("min", r.min().serialize());
+                    mm.put("max", r.max().serialize());
+                    l.add(mm);
+                }
+                y.set("walls", l.isEmpty() ? null : l);
+            }, "Найдено стен: " + res.walls().size() + " (прежний список стен заменён)");
+            for (String n : res.notes()) Msg.send(p, "<yellow>• " + Msg.esc(n));
+            if (p.getWorld().equals(w)) PlotSetup.show(plugin, p, w, plugin.registry().map(m.id), 30);
+            Msg.send(p, "<gray>Проверь подсветку: <red>красное</red> исчезнет, когда время стройки выйдет. Добавить стену вручную — выдели и /mgp setup wall " + m.id);
+            return;
+        }
+        Pos[] sel = selection(p);
+        if (sel == null) return;
+        ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+        edit(p, a, 2, y -> {
+            Map<String, Object> mm = new LinkedHashMap<>();
+            mm.put("min", r.min().serialize());
+            mm.put("max", r.max().serialize());
+            addMap(y, "walls", mm);
+        }, "Стена добавлена (" + (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1) + ")");
+    }
+
     /** Мир, в котором заданы координаты карты: исходный мир импорта (source.world), если загружен, иначе мир игрока. */
     private static org.bukkit.World mapWorld(Player p, MapConfig m) {
         String wn = m.yaml.getString("source.world");
@@ -1007,9 +1112,18 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "debug"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
                 out.addAll(List.of("on", "off"));
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("kit")) {
+                out.addAll(KitCommands.SUBS);
+            } else if (a.length == 3 && a[0].equalsIgnoreCase("kit")) {
+                plugin.registry().modes().forEach(m -> out.add(m.id));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("kit") && !a[1].equalsIgnoreCase("list")) {
+                ModeConfig mc = plugin.registry().mode(a[2]);
+                if (mc != null) out.addAll(mc.kits.keySet());
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("kit") && a[1].equalsIgnoreCase("save")) {
+                out.addAll(List.of("all", "defenders", "attackers", "seeker", "hider"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("shop")) {
                 plugin.shops().all().forEach(x -> out.add(x.id));
             } else if (a.length == 2 && (a[0].equalsIgnoreCase("optimize") || a[0].equalsIgnoreCase("rename") || a[0].equalsIgnoreCase("wand"))) {
@@ -1022,7 +1136,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -1052,6 +1166,11 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {
                 out.addAll(List.of("spawns:", "title:", "message:", "sound:", "mode:"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("wall")) {
+                out.addAll(List.of("auto", "clear"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && (a[1].equalsIgnoreCase("delplot") || a[1].equalsIgnoreCase("tpplot"))) {
+                MapConfig mc = plugin.registry().map(a[2]);
+                if (mc != null) for (int i = 1; i <= mc.plots.size(); i++) out.add(String.valueOf(i));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("alsomode")) {
                 plugin.registry().modes().forEach(m -> { out.add(m.id); out.add("-" + m.id); });
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("biome")) {

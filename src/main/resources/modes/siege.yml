@@ -32,6 +32,11 @@ gamerules:
   keep_inventory: false
 
 default-kit: ""
+# Наборы. Быстрее всего — собрать инвентарь (броню надеть) и ввести /mgp kit save siege <id> <defenders|attackers> [название]:
+# сохранятся все слоты, броня и вторая рука, предметы целиком (зачарования, имена). Набор с team заменяет
+# defender-items / attacker-items этой команды; если наборов у команды несколько — выбор в лобби, иначе первый.
+# Вручную: kits: { attack: { display: "<red>Штурм", icon: TNT, team: attackers,
+#                   items: ["IRON_SWORD", { material: IRON_HELMET, slot: head }, { material: TNT, amount: 8, slot: 2 }] } }
 kits: {}
 start-items: []
 

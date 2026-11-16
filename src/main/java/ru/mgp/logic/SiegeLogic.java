@@ -176,8 +176,9 @@ public final class SiegeLogic extends GameLogic {
 
     private void equip(Player p) {
         Team t = team(p);
-        session.equip(p); // общие start-items и кит
-        for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
+        // кит команды (kits с team: defenders / attackers) заменяет defender-items / attacker-items
+        ru.mgp.config.Kit kit = session.equip(p, t == Team.DEFENDERS ? "defenders" : "attackers");
+        if (kit == null || kit.team() == null) for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
             ItemStack it = s.build();
             if (s.slot != null) applySlot(p, s.slot, it); else p.getInventory().addItem(it);
         }
