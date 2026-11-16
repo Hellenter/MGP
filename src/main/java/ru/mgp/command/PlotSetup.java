@@ -2,7 +2,7 @@ package ru.mgp.command;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
-import org.bukkit.Particle;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -99,56 +99,80 @@ public final class PlotSetup {
 
     // ------------------------------------------------------------------ подсветка
 
-    private static final Map<UUID, BukkitTask> SHOWING = new HashMap<>();
-    private static final Particle.DustOptions[] TEAM = {new Particle.DustOptions(Color.ORANGE, 1.5f),
-            new Particle.DustOptions(Color.BLUE, 1.5f), new Particle.DustOptions(Color.FUCHSIA, 1.5f), new Particle.DustOptions(Color.OLIVE, 1.5f)};
 
-    /** Рамки частицами на seconds секунд: участки — зелёные, стены — красные, центр арены — белый столб,
-     *  play-зона — голубая, зоны команд — оранжевая, синяя, ... (в порядке team-zones). */
+    /** Рамки на seconds секунд: участки — зелёные, стены — красные, центр арены — белый столбик,
+     *  play-зона — голубая, зоны команд — оранжевая, синяя, ... (в порядке team-zones), части крепости — фиолетовые,
+     *  цели на разрушение — серые, спавны участков — жёлтые кубики. Над крепостью, участками и целями — подписи
+     *  с номерами. Всё видит только этот игрок; рамки сплошные на любом расстоянии (см. {@link Outline}). */
     public static void show(Plugin plugin, Player p, World w, MapConfig m, int seconds) {
-        BukkitTask old = SHOWING.remove(p.getUniqueId());
-        if (old != null) old.cancel();
-        Particle.DustOptions green = new Particle.DustOptions(Color.LIME, 1.2f), red = new Particle.DustOptions(Color.RED, 1.2f),
-                white = new Particle.DustOptions(Color.WHITE, 1.5f), yellow = new Particle.DustOptions(Color.YELLOW, 1.5f),
-                cyan = new Particle.DustOptions(Color.AQUA, 1.5f);
-        int[] left = {seconds * 2};
+        stop(p);
+        if (seconds <= 0) return;
+        List<org.bukkit.entity.Entity> labels = new ArrayList<>();
+        for (int i = 0; i < m.fortress.size(); i++) labels.add(label(plugin, p, w, m.fortress.get(i), "<light_purple><bold>Крепость " + (i + 1)));
+        for (int i = 0; i < m.plots.size(); i++) labels.add(label(plugin, p, w, m.plots.get(i).region(), "<green><bold>Участок " + (i + 1)));
+        for (MapConfig.Objective o : m.objectives) labels.add(label(plugin, p, w, o.region(), "<gray>Цель </gray>" + o.name()));
+        LABELS.put(p.getUniqueId(), labels);
+        Outline o = new Outline(plugin, p, w);
+        for (MapConfig.Plot pl : m.plots) {
+            o.box(pl.region(), Material.LIME_CONCRETE, Color.LIME);
+            if (pl.spawn() != null) marker(o, pl.spawn(), 0.4, Material.YELLOW_CONCRETE, Color.YELLOW);
+        }
+        for (Region r : m.walls) o.box(r, Material.RED_CONCRETE, Color.RED);
+        for (Region r : m.playZone) o.box(r, Material.LIGHT_BLUE_CONCRETE, Color.AQUA);
+        int ti = 0;
+        for (List<Region> l : m.teamZones.values()) {
+            for (Region r : l) o.box(r, TEAM_BLOCK[ti % TEAM_BLOCK.length], TEAM_GLOW[ti % TEAM_GLOW.length]);
+            ti++;
+        }
+        for (Region r : m.fortress) o.box(r, Material.PURPLE_CONCRETE, Color.fromRGB(0xc050ff));
+        for (MapConfig.Objective ob : m.objectives) o.box(ob.region(), Material.LIGHT_GRAY_CONCRETE, Color.SILVER);
+        Pos arena = m.arena != null ? m.arena : m.spectator;
+        if (arena != null) o.cube(arena.x() - 0.15, arena.y(), arena.z() - 0.15, arena.x() + 0.15, arena.y() + 3, arena.z() + 0.15, Material.WHITE_CONCRETE, Color.fromRGB(0xFEFEFE));
+        OUTLINES.put(p.getUniqueId(), o);
+        int[] left = {seconds * 4};
         BukkitTask t = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            if (left[0]-- <= 0 || !p.isOnline() || !p.getWorld().equals(w)) {
-                BukkitTask me = SHOWING.remove(p.getUniqueId());
-                if (me != null) me.cancel();
-                return;
-            }
-            for (MapConfig.Plot pl : m.plots) {
-                edges(p, pl.region(), green);
-                if (pl.spawn() != null) column(p, pl.spawn(), yellow, 2);
-            }
-            for (Region r : m.walls) edges(p, r, red);
-            for (Region r : m.playZone) edges(p, r, cyan);
-            int ti = 0;
-            for (List<Region> l : m.teamZones.values()) { for (Region r : l) edges(p, r, TEAM[ti % TEAM.length]); ti++; }
-            Pos arena = m.arena != null ? m.arena : m.spectator;
-            if (arena != null) column(p, arena, white, 4);
-        }, 0L, 10L);
+            if (left[0]-- <= 0 || !p.isOnline() || !p.getWorld().equals(w)) { stop(p); return; }
+            o.refresh();
+        }, 0L, 5L);
         SHOWING.put(p.getUniqueId(), t);
     }
 
-    private static void edges(Player p, Region r, Particle.DustOptions d) {
-        double x1 = r.minX(), y1 = r.minY(), z1 = r.minZ(), x2 = r.maxX() + 1, y2 = r.maxY() + 1, z2 = r.maxZ() + 1;
-        double[][] lines = {
-                {x1, y1, z1, x2, y1, z1}, {x1, y1, z2, x2, y1, z2}, {x1, y2, z1, x2, y2, z1}, {x1, y2, z2, x2, y2, z2},
-                {x1, y1, z1, x1, y1, z2}, {x2, y1, z1, x2, y1, z2}, {x1, y2, z1, x1, y2, z2}, {x2, y2, z1, x2, y2, z2},
-                {x1, y1, z1, x1, y2, z1}, {x2, y1, z1, x2, y2, z1}, {x1, y1, z2, x1, y2, z2}, {x2, y1, z2, x2, y2, z2}};
-        for (double[] l : lines) {
-            double len = Math.max(Math.abs(l[3] - l[0]), Math.max(Math.abs(l[4] - l[1]), Math.abs(l[5] - l[2])));
-            int n = (int) Math.min(200, Math.max(1, len));
-            for (int i = 0; i <= n; i++) {
-                double k = (double) i / n;
-                p.spawnParticle(Particle.DUST, l[0] + (l[3] - l[0]) * k, l[1] + (l[4] - l[1]) * k, l[2] + (l[5] - l[2]) * k, 1, 0, 0, 0, 0, d);
-            }
-        }
+    private static void marker(Outline o, Pos at, double size, Material m, Color c) {
+        double h = size / 2;
+        o.cube(at.x() - h, at.y(), at.z() - h, at.x() + h, at.y() + size, at.z() + h, m, c);
     }
 
-    private static void column(Player p, Pos at, Particle.DustOptions d, int height) {
-        for (double y = 0; y <= height; y += 0.5) p.spawnParticle(Particle.DUST, at.x(), at.y() + y, at.z(), 1, 0, 0, 0, 0, d);
+    private static final Map<UUID, BukkitTask> SHOWING = new HashMap<>();
+    private static final Map<UUID, Outline> OUTLINES = new HashMap<>();
+    private static final Material[] TEAM_BLOCK = {Material.ORANGE_CONCRETE, Material.BLUE_CONCRETE, Material.MAGENTA_CONCRETE, Material.GREEN_CONCRETE};
+    private static final Color[] TEAM_GLOW = {Color.ORANGE, Color.BLUE, Color.FUCHSIA, Color.GREEN};
+
+    private static final Map<UUID, List<org.bukkit.entity.Entity>> LABELS = new HashMap<>();
+
+    /** Убрать подсветку и подписи игрока. */
+    public static void stop(Player p) {
+        BukkitTask old = SHOWING.remove(p.getUniqueId());
+        if (old != null) old.cancel();
+        Outline ol = OUTLINES.remove(p.getUniqueId());
+        if (ol != null) ol.hide();
+        List<org.bukkit.entity.Entity> l = LABELS.remove(p.getUniqueId());
+        if (l != null) for (org.bukkit.entity.Entity e : l) if (e.isValid()) e.remove();
+    }
+
+    /** Подпись над областью: TextDisplay, который видит только этот игрок. */
+    private static org.bukkit.entity.Entity label(Plugin plugin, Player p, World w, Region r, String text) {
+        org.bukkit.Location at = new org.bukkit.Location(w, (r.minX() + r.maxX() + 1) / 2.0, r.maxY() + 1.6, (r.minZ() + r.maxZ() + 1) / 2.0);
+        org.bukkit.entity.TextDisplay d = w.spawn(at, org.bukkit.entity.TextDisplay.class, x -> {
+            x.setPersistent(false);
+            x.setVisibleByDefault(false);
+            x.text(ru.mgp.util.Msg.parse(text));
+            x.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            x.setSeeThrough(true);
+            x.setShadowed(true);
+            x.setTransformation(new org.bukkit.util.Transformation(new org.joml.Vector3f(), new org.joml.Quaternionf(),
+                    new org.joml.Vector3f(1.8f, 1.8f, 1.8f), new org.joml.Quaternionf()));
+        });
+        p.showEntity(plugin, d);
+        return d;
     }
 }
