@@ -100,13 +100,17 @@ public final class PlotSetup {
     // ------------------------------------------------------------------ подсветка
 
     private static final Map<UUID, BukkitTask> SHOWING = new HashMap<>();
+    private static final Particle.DustOptions[] TEAM = {new Particle.DustOptions(Color.ORANGE, 1.5f),
+            new Particle.DustOptions(Color.BLUE, 1.5f), new Particle.DustOptions(Color.FUCHSIA, 1.5f), new Particle.DustOptions(Color.OLIVE, 1.5f)};
 
-    /** Рамки частицами на seconds секунд: участки — зелёные, стены — красные, центр арены — белый столб. */
+    /** Рамки частицами на seconds секунд: участки — зелёные, стены — красные, центр арены — белый столб,
+     *  play-зона — голубая, зоны команд — оранжевая, синяя, ... (в порядке team-zones). */
     public static void show(Plugin plugin, Player p, World w, MapConfig m, int seconds) {
         BukkitTask old = SHOWING.remove(p.getUniqueId());
         if (old != null) old.cancel();
         Particle.DustOptions green = new Particle.DustOptions(Color.LIME, 1.2f), red = new Particle.DustOptions(Color.RED, 1.2f),
-                white = new Particle.DustOptions(Color.WHITE, 1.5f), yellow = new Particle.DustOptions(Color.YELLOW, 1.5f);
+                white = new Particle.DustOptions(Color.WHITE, 1.5f), yellow = new Particle.DustOptions(Color.YELLOW, 1.5f),
+                cyan = new Particle.DustOptions(Color.AQUA, 1.5f);
         int[] left = {seconds * 2};
         BukkitTask t = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (left[0]-- <= 0 || !p.isOnline() || !p.getWorld().equals(w)) {
@@ -119,6 +123,9 @@ public final class PlotSetup {
                 if (pl.spawn() != null) column(p, pl.spawn(), yellow, 2);
             }
             for (Region r : m.walls) edges(p, r, red);
+            for (Region r : m.playZone) edges(p, r, cyan);
+            int ti = 0;
+            for (List<Region> l : m.teamZones.values()) { for (Region r : l) edges(p, r, TEAM[ti % TEAM.length]); ti++; }
             Pos arena = m.arena != null ? m.arena : m.spectator;
             if (arena != null) column(p, arena, white, 4);
         }, 0L, 10L);

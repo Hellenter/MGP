@@ -57,6 +57,7 @@ public final class GameSession {
     private final Set<String> firedTriggers = new HashSet<>();
     private final MapScripts scripts = new MapScripts(this);
     private final Objectives objectives = new Objectives(this);
+    private final PlayZone zone = new PlayZone(this);
     /** Группы спавнов, включённые или выключенные во время игры (spawns: enable/disable). */
     private final Map<String, Boolean> spawnGroups = new HashMap<>();
     private final Map<String, Set<UUID>> firedPerPlayer = new HashMap<>();
@@ -193,6 +194,7 @@ public final class GameSession {
         boolean wasAlive = alive.remove(u);
         scripts.clear(p);
         objectives.clear(p);
+        zone.clear(p);
         if (toHub) plugin.hub().send(p);
         else plugin.visibility().refresh(p);
 
@@ -474,7 +476,7 @@ public final class GameSession {
         alive.addAll(players);
         spawnGroups.clear();
         logic.onStart();
-        if (state == State.PLAYING) objectives.start();
+        if (state == State.PLAYING) { objectives.start(); zone.start(); }
         for (Map.Entry<String, String> e : chosenModifiers.entrySet()) {
             ModifierGroup g = modifierGroup(e.getKey());
             ModifierGroup.Option o = g == null ? null : g.option(e.getValue());
@@ -499,6 +501,7 @@ public final class GameSession {
         if (lockedTime != null) gameWorld.setTime(lockedTime);
         checkTriggers();
         objectives.tick();
+        if (state == State.PLAYING) zone.tick();
         logic.onTick();
         if (state == State.PLAYING && mode.timeLimit > 0 && elapsed >= mode.timeLimit) logic.onTimeUp();
     }
@@ -755,6 +758,7 @@ public final class GameSession {
         }
         scripts.clearAll();
         objectives.clearAll();
+        zone.clearAll();
         logic.onEnd();
     }
 
@@ -847,6 +851,7 @@ public final class GameSession {
     public GameLogic logic() { return logic; }
     public MapScripts scripts() { return scripts; }
     public Objectives objectives() { return objectives; }
+    public PlayZone zone() { return zone; }
     public MapConfig map() { return map; }
     public World gameWorld() { return gameWorld; }
     public World waitingWorld() { return waitingWorld; }

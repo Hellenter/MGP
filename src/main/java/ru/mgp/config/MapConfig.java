@@ -69,7 +69,23 @@ public final class MapConfig {
     public final List<Region> walls = new ArrayList<>();
     /** Билд баттл: центр арены, куда переносит всех после стройки и в конце (по умолчанию spectator). */
     public final Pos arena;
+    /** Play-зона: игроки не выходят за эти области (объединение); пусто — без ограничения. */
+    public final List<Region> playZone = new ArrayList<>();
+    /** Стартовые зоны команд (например attackers / defenders в осаде); снимаются по таймеру или действию zones: open. */
+    public final Map<String, List<Region>> teamZones = new LinkedHashMap<>();
+    /** Через сколько секунд после старта снять зоны команд; -1 — взять из режима (settings.team-zones-open). */
+    public final int teamZonesOpen;
     public final List<Script> scripts = new ArrayList<>();
+
+    private static List<Region> regions(List<Map<?, ?>> raw) {
+        List<Region> out = new ArrayList<>();
+        for (Map<?, ?> r : raw) {
+            Map<String, Object> m = Cfg.asMap(r);
+            Pos a = Pos.parse(Cfg.str(m, "min", null)), b = Pos.parse(Cfg.str(m, "max", null));
+            if (a != null && b != null) out.add(Region.of(a, b));
+        }
+        return out;
+    }
 
     public boolean playableIn(String modeId) {
         if (mode.equalsIgnoreCase(modeId)) return true;
@@ -152,6 +168,13 @@ public final class MapConfig {
             plots.add(new Plot(Region.of(Pos.parse(Cfg.str(m, "min", null)), Pos.parse(Cfg.str(m, "max", null))),
                     Pos.parse(Cfg.str(m, "spawn", null))));
         }
+        playZone.addAll(regions(y.getMapList("play-zone")));
+        org.bukkit.configuration.ConfigurationSection tz = y.getConfigurationSection("team-zones");
+        if (tz != null) for (String team : tz.getKeys(false)) {
+            List<Region> l = regions(tz.getMapList(team));
+            if (!l.isEmpty()) teamZones.put(team.toLowerCase(java.util.Locale.ROOT), l);
+        }
+        teamZonesOpen = y.getInt("team-zones-open", -1);
         for (Map<?, ?> raw : y.getMapList("walls")) {
             Map<String, Object> m = Cfg.asMap(raw);
             Pos a = Pos.parse(Cfg.str(m, "min", null)), b = Pos.parse(Cfg.str(m, "max", null));

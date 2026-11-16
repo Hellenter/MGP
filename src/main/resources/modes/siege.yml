@@ -70,6 +70,8 @@ sidebar:
 
 settings:
   defender-ratio: 0.4            # доля защитников (пати остаются в одной команде)
+  team-zones-open: 60            # через сколько сек. снимается граница между стартовыми зонами команд
+                                 # (карта: /mgp setup teamzone <карта> attackers|defenders; 0 — только действием zones: open)
   attacker-respawn: 5            # через сколько сек. возрождается атакующий (-1 — не возрождается)
   attacker-keep-inventory: true  # атакующий не теряет вещи при смерти (новый ТНТ не выдаётся!)
   tnt-auto-ignite: true          # ТНТ поджигается сразу при установке

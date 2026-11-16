@@ -219,6 +219,13 @@ public final class ActionRunner {
                 };
                 s.setSpawnGroup(t[1], on);
             }
+            case "zones" -> {
+                // zones: open | close — снять или вернуть границы между командами (team-zones карты)
+                String v = arg.trim().toLowerCase(Locale.ROOT);
+                if (v.equals("open") || v.equals("on")) s.zone().setTeamZones(true);
+                else if (v.equals("close") || v.equals("off")) s.zone().setTeamZones(false);
+                else throw new IllegalArgumentException("ожидалось zones: open или zones: close");
+            }
             case "mode" -> {
                 if (!s.logic().handleAction(arg, target))
                     s.plugin().getLogger().warning("Режим " + s.mode.type + " не знает действие: " + arg);

@@ -248,7 +248,9 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup name <карта> <название></yellow> — только название для игроков (MiniMessage, например <green>Джунгли)",
                     "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты; <yellow>plots <карта></yellow> — список, <yellow>delplot <карта> <n></yellow>",
                     "<yellow>/mgp setup wall <карта> [auto [зазор]|clear]</yellow> — стены между участками (исчезают после стройки); <yellow>arena <карта></yellow> — центр арены",
-                    "<yellow>/mgp setup show <карта> [сек]</yellow> — подсветить участки, стены и центр арены частицами",
+                    "<yellow>/mgp setup show <карта> [сек]</yellow> — подсветить частицами участки, стены, центр арены, play-зону и зоны команд",
+                    "<yellow>/mgp setup zone <карта> [clear]</yellow> — play-зона из выделения: за неё не выйти, вылетевших возвращает",
+                    "<yellow>/mgp setup teamzone <карта> <команда> [clear]</yellow> — стартовая зона команды; <yellow>teamzone <карта> open <сек></yellow> — когда границы снимаются",
                     "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
                     "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
                     "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
@@ -477,6 +479,34 @@ public final class MgpCommand implements TabExecutor {
                 case "arena" -> edit(p, a, 2, y -> y.set("arena", Pos.of(loc).serialize()),
                         "Центр арены задан: сюда всех перенесёт, когда время стройки выйдет, и в конце игры");
                 case "wall" -> setupWalls(p, a);
+                case "zone" -> {
+                    // /mgp setup zone <карта> [clear] — play-зона из выделения (можно несколько областей)
+                    need(a, 2);
+                    if (a.length > 2 && a[2].equalsIgnoreCase("clear")) { edit(p, a, 2, y -> y.set("play-zone", null), "Play-зона убрана — ограничений нет"); return; }
+                    Pos[] sel = selection(p);
+                    if (sel == null) return;
+                    ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+                    edit(p, a, 2, y -> addMap(y, "play-zone", regionMap(r)), "Область play-зоны добавлена (" + dims(r)
+                            + "). Игроки не выйдут за неё; ещё область — выдели и снова эта команда. Проверить: /mgp setup show " + a[1]);
+                }
+                case "teamzone" -> {
+                    // /mgp setup teamzone <карта> <команда> [clear] | open <сек>
+                    need(a, 3);
+                    if (a[2].equalsIgnoreCase("open")) {
+                        need(a, 4);
+                        int sec = Integer.parseInt(a[3]);
+                        edit(p, a, 4, y -> y.set("team-zones-open", sec), sec > 0 ? "Зоны команд откроются через " + Msg.time(sec) + " после старта"
+                                : "Зоны команд по таймеру не открываются (только действием zones: open)");
+                        return;
+                    }
+                    String team = a[2].toLowerCase(Locale.ROOT);
+                    if (a.length > 3 && a[3].equalsIgnoreCase("clear")) { edit(p, a, 3, y -> y.set("team-zones." + team, null), "Зона команды " + team + " убрана"); return; }
+                    Pos[] sel = selection(p);
+                    if (sel == null) return;
+                    ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+                    edit(p, a, 3, y -> addMap(y, "team-zones." + team, regionMap(r)), "Стартовая зона команды " + team + " добавлена (" + dims(r)
+                            + "). Когда откроется: /mgp setup teamzone " + a[1] + " open <сек>");
+                }
                 case "show" -> {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
@@ -485,7 +515,7 @@ public final class MgpCommand implements TabExecutor {
                     org.bukkit.World w = mapWorld(p, m);
                     if (!p.getWorld().equals(w)) { Msg.send(p, "<red>Карта " + m.id + " в мире " + w.getName() + " — перейди туда"); return; }
                     PlotSetup.show(plugin, p, w, m, sec);
-                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>");
+                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>");
                 }
                 case "trigger" -> {
                     need(a, 3);
@@ -530,6 +560,14 @@ public final class MgpCommand implements TabExecutor {
                     Msg.send(p, "<gray>спавнов " + m.spawns.size() + ", сундуков " + m.chests.size() + ", торговцев "
                             + m.traders.size() + ", триггеров " + m.triggers.size() + ", участков " + m.plots.size()
                             + (m.plots.isEmpty() ? "" : ", стен " + m.walls.size() + (m.arena != null ? ", центр арены задан" : ", центр арены не задан")));
+                    if (!m.playZone.isEmpty() || !m.teamZones.isEmpty()) {
+                        Msg.send(p, "<gray>play-зона: " + m.playZone.size() + " обл., зоны команд: " + (m.teamZones.isEmpty() ? "нет" : String.join(", ", m.teamZones.keySet()))
+                                + (m.teamZonesOpen >= 0 ? ", открываются через " + m.teamZonesOpen + " с" : ""));
+                        int outside = 0;
+                        for (Pos sp : m.spawns) if (!m.playZone.isEmpty() && m.playZone.stream().noneMatch(r -> r.contains(sp.bx(), sp.by(), sp.bz()))) outside++;
+                        for (MapConfig.SpawnPoint sp : m.spawnPoints) if (!m.playZone.isEmpty() && m.playZone.stream().noneMatch(r -> r.contains(sp.pos().bx(), sp.pos().by(), sp.pos().bz()))) outside++;
+                        if (outside > 0) Msg.send(p, "<red>Спавнов за play-зоной: " + outside + " — расширь зону (например /mgp setup expand 10 vert)");
+                    }
                     listSpawns(p, a);
                 }
                 default -> setup(p, new String[0]);
@@ -918,6 +956,17 @@ public final class MgpCommand implements TabExecutor {
     }
 
     /** /mgp setup wall <карта> — стена из выделения; auto [зазор] — найти стены между участками; clear — убрать все. */
+    private static Map<String, Object> regionMap(ru.mgp.util.Region r) {
+        Map<String, Object> mm = new LinkedHashMap<>();
+        mm.put("min", r.min().serialize());
+        mm.put("max", r.max().serialize());
+        return mm;
+    }
+
+    private static String dims(ru.mgp.util.Region r) {
+        return (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1);
+    }
+
     private void setupWalls(Player p, String[] a) {
         need(a, 2);
         MapConfig m = plugin.registry().map(a[1]);
@@ -1136,7 +1185,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -1166,6 +1215,12 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {
                 out.addAll(List.of("spawns:", "title:", "message:", "sound:", "mode:"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("zone")) {
+                out.add("clear");
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamzone")) {
+                out.addAll(List.of("attackers", "defenders", "seeker", "hider", "open"));
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamzone")) {
+                out.addAll(a[3].equalsIgnoreCase("open") ? List.of("30", "60", "120", "0") : List.of("clear"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("wall")) {
                 out.addAll(List.of("auto", "clear"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && (a[1].equalsIgnoreCase("delplot") || a[1].equalsIgnoreCase("tpplot"))) {

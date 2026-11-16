@@ -116,6 +116,12 @@ public final class SiegeLogic extends GameLogic {
 
     public Team team(Player p) { return teams.get(p.getUniqueId()); }
 
+    @Override
+    public String zoneTeam(Player p) {
+        Team t = teams.get(p.getUniqueId());
+        return t == null ? null : t == Team.DEFENDERS ? "defenders" : "attackers";
+    }
+
     private boolean is(Player p, Team t) { return teams.get(p.getUniqueId()) == t; }
 
     private List<Player> alive(Team t) {

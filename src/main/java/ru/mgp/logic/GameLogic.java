@@ -58,6 +58,9 @@ public abstract class GameLogic {
     /** Цвет ника по командам: ник → цвет (пусто — без команд). */
     public Map<String, net.kyori.adventure.text.format.NamedTextColor> teamColors() { return Map.of(); }
 
+    /** Команда игрока для зон карты (team-zones) и спавнов: например attackers / defenders; null — без команды. */
+    public String zoneTeam(Player p) { return null; }
+
     /** Удар игрока по сущности (до проверок ванили) — например, по хитбоксу маскировки. */
     public void onAttackEntity(io.papermc.paper.event.player.PrePlayerAttackEntityEvent e) {}
 
