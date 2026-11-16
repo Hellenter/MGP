@@ -239,7 +239,7 @@ public final class AssaultLogic extends GameLogic {
     @Override
     public void onStart() {
         List<Player> all = session.alivePlayers();
-        if (all.size() < 2) { session.end(List.of(), "<red>Для штурма нужно хотя бы 2 игрока."); return; }
+        if (all.size() < 2 && !session.solo()) { session.end(List.of(), "<red>Для штурма нужно хотя бы 2 игрока."); return; }
         loadMap();
         Set<UUID> def = TeamSplit.defenders(session, all, defenderRatio);
         for (Player p : all) {
@@ -665,6 +665,10 @@ public final class AssaultLogic extends GameLogic {
         session.broadcast((t == null ? "<white>" : t.color) + Msg.esc(p.getName()) + " <gray>покинул игру.");
         Bukkit.getScheduler().runTask(session.plugin(), () -> {
             if (ended || !session.isPlaying()) return;
+            if (session.solo()) { // отладка в одиночку: пустая команда не означает победу
+                if (session.aliveIds().isEmpty()) session.end(List.of(), null);
+                return;
+            }
             if (members(Team.DEFENDERS).isEmpty()) win(Team.ATTACKERS, "<red>Защитников не осталось!");
             else if (members(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<aqua>Атакующих не осталось!");
         });

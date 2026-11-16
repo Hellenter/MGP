@@ -118,6 +118,17 @@ public final class MGPPlugin extends JavaPlugin {
         if (sessions != null) sessions.shutdown();
     }
 
+    /**
+     * Режим отладки в одиночку (config.yml → debug.solo, /mgp debug solo on|off): игра стартует с 1 игроком
+     * и не заканчивается из-за того, что игроков или одной из команд не осталось. Время, цели и стадии работают как обычно.
+     */
+    public boolean soloDebug() { return getConfig().getBoolean("debug.solo", false); }
+
+    public void setSoloDebug(boolean on) {
+        getConfig().set("debug.solo", on);
+        saveConfig();
+    }
+
     public void reloadAll() {
         reloadConfig();
         Msg.setPrefix(getConfig().getString("prefix", ""));

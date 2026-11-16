@@ -157,7 +157,7 @@ public final class HungerGamesLogic extends GameLogic {
 
     private void checkWin() {
         if (!session.isPlaying()) return;
-        if (session.aliveIds().size() <= 1) session.end(new ArrayList<>(session.aliveIds()), null);
+        if (session.aliveIds().size() <= (session.solo() ? 0 : 1)) session.end(new ArrayList<>(session.aliveIds()), null);
     }
 
     @Override

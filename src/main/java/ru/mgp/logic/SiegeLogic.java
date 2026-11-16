@@ -158,7 +158,7 @@ public final class SiegeLogic extends GameLogic {
     @Override
     public void onStart() {
         List<Player> all = session.alivePlayers();
-        if (all.size() < 2) { session.end(List.of(), "<red>Для осады нужно хотя бы 2 игрока."); return; }
+        if (all.size() < 2 && !session.solo()) { session.end(List.of(), "<red>Для осады нужно хотя бы 2 игрока."); return; }
         assignTeams(all);
         for (Player p : all) PlayerUtil.reset(p, GameMode.SURVIVAL);
         session.spreadToSpawns(alive(Team.DEFENDERS), Team.DEFENDERS.id);
@@ -515,6 +515,10 @@ public final class SiegeLogic extends GameLogic {
 
     private void checkWin() {
         if (!session.isPlaying()) return;
+        if (session.solo()) { // отладка в одиночку: пустая команда не означает победу
+            if (session.aliveIds().isEmpty()) session.end(List.of(), null);
+            return;
+        }
         if (alive(Team.DEFENDERS).isEmpty()) win(Team.ATTACKERS, "<red>Атакующие взяли крепость!");
         else if (alive(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<aqua>Атакующих не осталось — крепость устояла!");
     }

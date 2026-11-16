@@ -123,7 +123,7 @@ public final class HideAndSeekLogic extends GameLogic {
     @Override
     public void onStart() {
         List<Player> all = new ArrayList<>(session.alivePlayers());
-        if (all.size() < 2) { // например, /mgp start в одиночку: ни прятаться, ни искать
+        if (all.size() < 2 && !session.solo()) { // например, /mgp start в одиночку: ни прятаться, ни искать
             session.end(List.of(), "<red>Для пряток нужно хотя бы 2 игрока.");
             return;
         }
@@ -503,6 +503,10 @@ public final class HideAndSeekLogic extends GameLogic {
 
     private void checkWin() {
         if (!session.isPlaying()) return;
+        if (session.solo()) { // отладка: одному не с кем играть — заканчиваем, только когда никого не осталось
+            if (session.aliveIds().isEmpty()) session.end(List.of(), null);
+            return;
+        }
         if (count(Role.HIDER) == 0) {
             Set<UUID> win = new HashSet<>();
             for (UUID u : session.aliveIds()) if (roles.get(u) == Role.SEEKER) win.add(u);
