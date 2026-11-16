@@ -18,6 +18,7 @@ import java.util.*;
  * data: предмет целиком (зачарования, имя, компоненты) в Base64 — так сохраняет /mgp kit save; material и amount рядом для наглядности.
  * explosive: true | <тип> — разрывная стрела (взрыв настраивается в settings.explosive-arrows режима).
  *   Коротко: "EXPLOSIVE_ARROW 16" — 16 разрывных стрел.
+ * gun: <оружие> — огнестрел из guns.yml ("GUN ak47"); ammo: <тип> — патроны ("AMMO 762 60").
  */
 public final class ItemSpec {
     public final Material material;
@@ -32,6 +33,10 @@ public final class ItemSpec {
     /** Профиль разрывной стрелы (default или имя из explosive-arrows.types) или null. */
     public final String explosive;
     public static final String EXPLOSIVE_ARROW = "EXPLOSIVE_ARROW";
+    /** Оружие из guns.yml или null. */
+    public String gun;
+    /** Тип патронов из guns.yml или null. */
+    public String ammo;
 
     private ItemSpec(Material material, int amount, String name, List<String> lore,
                      Map<String, Integer> enchants, boolean unbreakable, String slot) {
@@ -60,10 +65,25 @@ public final class ItemSpec {
                 int amount = p.length > 1 ? Integer.parseInt(p[1]) : 1;
                 return new ItemSpec(Material.ARROW, amount, null, List.of(), Map.of(), false, null, null, p.length > 2 ? p[2] : "default");
             }
+            if (p[0].equalsIgnoreCase("GUN") || p[0].equalsIgnoreCase("AMMO")) {
+                if (p.length < 2) throw new IllegalArgumentException("Нужно имя: " + o);
+                boolean gun = p[0].equalsIgnoreCase("GUN");
+                ItemSpec spec = new ItemSpec(gun ? Material.STICK : Material.PHANTOM_MEMBRANE,
+                        p.length > 2 ? Integer.parseInt(p[2]) : (gun ? 1 : 32), null, List.of(), Map.of(), false, null);
+                if (gun) spec.gun = p[1]; else spec.ammo = p[1];
+                return spec;
+            }
             Material mat = Material.matchMaterial(p[0]);
             if (mat == null) throw new IllegalArgumentException("Неизвестный материал: " + p[0]);
             int amount = p.length > 1 ? Integer.parseInt(p[1]) : 1;
             return new ItemSpec(mat, amount, null, List.of(), Map.of(), false, null);
+        }
+        if (m.get("gun") != null || m.get("ammo") != null) {
+            boolean gun = m.get("gun") != null;
+            ItemSpec spec = new ItemSpec(gun ? Material.STICK : Material.PHANTOM_MEMBRANE, Cfg.integer(m, "amount", gun ? 1 : 32),
+                    null, List.of(), Map.of(), false, m.get("slot") == null ? null : String.valueOf(m.get("slot")));
+            if (gun) spec.gun = String.valueOf(m.get("gun")); else spec.ammo = String.valueOf(m.get("ammo"));
+            return spec;
         }
         String matName = Cfg.str(m, "material", "STONE");
         String explosive = explosiveType(m.get("explosive"));
@@ -105,10 +125,17 @@ public final class ItemSpec {
     public ItemStack build() { return build(amount); }
 
     public ItemStack build(int count) {
+        var guns = ru.mgp.gun.GunService.get();
+        if (gun != null || ammo != null) {
+            ItemStack it = guns == null ? null : gun != null ? guns.item(gun) : guns.ammo(ammo, count);
+            if (it != null) return it;
+            return new ItemStack(Material.BARRIER); // нет такого оружия в guns.yml
+        }
         if (data != null) {
             try {
                 ItemStack it = ItemStack.deserializeBytes(Base64.getDecoder().decode(data));
                 if (count != amount) it.setAmount(Math.max(1, count));
+                if (guns != null) guns.fresh(it); // копия оружия — отдельный экземпляр со своим магазином
                 return explosive != null ? Keys.explosive(it, explosive) : it;
             } catch (Exception e) {
                 // повреждённые данные — собираем по material/amount ниже

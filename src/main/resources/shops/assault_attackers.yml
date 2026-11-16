@@ -1,5 +1,5 @@
 # Магазин атаки в Штурме. Править удобнее в игре: /mgp shop assault_attackers
-# price: "MONEY n" — монеты счёта. Набор — items: [...] (всё за одну покупку), name и icon — как он выглядит.
+# price: "MONEY n" — монеты счёта. Огнестрел — "GUN <оружие>", патроны — "AMMO <тип> <кол-во>" (guns.yml). Набор — items: [...] (всё за одну покупку), name и icon — как он выглядит.
 title: "<dark_gray>Арсенал атаки"
 npc-name: "<red><bold>АРСЕНАЛ АТАКИ"
 profession: weaponsmith
@@ -42,6 +42,31 @@ categories:
       - { item: { material: CROSSBOW, enchants: { quick_charge: 1 }, unbreakable: true }, price: "MONEY 400" }
       - { item: "ARROW 16", price: "MONEY 50" }
       - { item: { material: SHIELD, unbreakable: true }, price: "MONEY 200" }
+  - name: "<dark_red>Огнестрел"
+    icon: CROSSBOW
+    items:
+      - { item: "GUN p30", price: "MONEY 150" }
+      - { item: "GUN deagle", price: "MONEY 450" }
+      - { item: "GUN uzi", price: "MONEY 600" }
+      - { item: "GUN mp5", price: "MONEY 750" }
+      - { item: "GUN spas", price: "MONEY 900" }
+      - { item: "GUN m16", price: "MONEY 1200" }
+      - { item: "GUN famas", price: "MONEY 1100" }
+      - { item: "GUN ak47", price: "MONEY 1400" }
+      - { item: "GUN aa12", price: "MONEY 1800" }
+      - { item: "GUN dragunov", price: "MONEY 1700" }
+      - { item: "GUN pkp", price: "MONEY 2200" }
+      - { item: "GUN awp", price: "MONEY 2500" }
+      - { item: "GUN m79", price: "MONEY 1500" }
+  - name: "<gray>Патроны"
+    icon: PHANTOM_MEMBRANE
+    items:
+      - { item: "AMMO 9mm 30", price: "MONEY 40" }
+      - { item: "AMMO 556 30", price: "MONEY 60" }
+      - { item: "AMMO 762 30", price: "MONEY 70" }
+      - { item: "AMMO shotgun 16", price: "MONEY 60" }
+      - { item: "AMMO 50cal 10", price: "MONEY 80" }
+      - { item: "EXPLOSIVE_ARROW 2", price: "MONEY 200" }
   - name: "<aqua>Броня"
     icon: IRON_CHESTPLATE
     items:

@@ -58,6 +58,8 @@ public final class MGPPlugin extends JavaPlugin {
         parties = new ru.mgp.party.PartyService(this);
         friends = new ru.mgp.friend.FriendService(this);
         friends.load();
+        guns = new ru.mgp.gun.GunService(this); // до магазинов: товары "GUN ..." собираются через него
+        guns.load();
         shops = new ru.mgp.shop.ShopService(this);
         shops.load();
 
@@ -66,6 +68,7 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(new PlayerListener(this), this);
         pm.registerEvents(new GameListener(this), this);
         pm.registerEvents(new ru.mgp.session.ExplosiveArrows(this), this);
+        pm.registerEvents(guns, this);
         wand = new ru.mgp.editor.ScriptWand(this);
         pm.registerEvents(wand, this);
         pm.registerEvents(shops, this);
@@ -108,6 +111,7 @@ public final class MGPPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (mgpCommand != null) mgpCommand.shutdown();
+        if (guns != null) guns.shutdown();
         if (wand != null) wand.shutdown();
         if (npcs != null) npcs.shutdown();
         if (panel != null) panel.stop();
@@ -119,6 +123,7 @@ public final class MGPPlugin extends JavaPlugin {
         Msg.setPrefix(getConfig().getString("prefix", ""));
         registry.load();
         servers.load();
+        if (guns != null) guns.load();
         shops.load();
         if (npcs != null) npcs.load();
     }
@@ -140,6 +145,9 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.shop.ShopService shops;
     public ru.mgp.shop.ShopService shops() { return shops; }
+
+    private ru.mgp.gun.GunService guns;
+    public ru.mgp.gun.GunService guns() { return guns; }
 
     private ru.mgp.editor.ScriptWand wand;
     public ru.mgp.editor.ScriptWand wand() { return wand; }
