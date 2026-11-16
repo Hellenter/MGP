@@ -225,6 +225,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup clearspawns <карта></yellow> — удалить все спавны",
                     "<yellow>/mgp setup spectator <карта></yellow> — точка наблюдателей",
                     "<yellow>/mgp setup seekerspawn <карта> [none]</yellow> — комната ищущих в прятках",
+                    "<yellow>/mgp setup modes <карта> [режим...]</yellow> — в каких режимах играется карта (без режимов — меню); <yellow>/mgp setup maps</yellow> — карты по режимам",
                     "<yellow>/mgp setup alsomode <карта> <режим|-режим></yellow> — карта играется и в другом режиме",
                     "<yellow>/mgp setup center <карта> [размер барьера]",
                     "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
@@ -343,6 +344,36 @@ public final class MgpCommand implements TabExecutor {
                     if (a.length > 2 && a[2].equalsIgnoreCase("none")) y.set("seeker-spawn", null);
                     else y.set("seeker-spawn", Pos.of(loc).serialize());
                 }, "Комната ищущих задана (none — убрать)");
+                case "modes" -> {
+                    // /mgp setup modes <карта> — меню; /mgp setup modes <карта> <режим> [режим...] — задать список (первый — основной)
+                    need(a, 2);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    if (a.length == 2) { new MapModesMenu(plugin, m).open(p); return; }
+                    List<String> list = new ArrayList<>();
+                    for (int i = 2; i < a.length; i++) {
+                        if (plugin.registry().mode(a[i]) == null) { Msg.send(p, "<red>Нет режима " + Msg.esc(a[i]) + ". Есть: " + String.join(", ", plugin.registry().modes().stream().map(x -> x.id).toList())); return; }
+                        list.add(a[i]);
+                    }
+                    MapModesMenu.apply(plugin, p, m, list);
+                }
+                case "maps" -> {
+                    // /mgp setup maps [режим] — какие карты в каком режиме
+                    for (ModeConfig mc : plugin.registry().modes()) {
+                        if (a.length > 1 && !mc.id.equalsIgnoreCase(a[1])) continue;
+                        List<MapConfig> ms = plugin.registry().mapsFor(mc.id);
+                        StringBuilder sb = new StringBuilder(mc.displayName + " <dark_gray>(" + mc.id + ")<gray>: ");
+                        if (ms.isEmpty()) sb.append("<red>нет карт");
+                        for (int i = 0; i < ms.size(); i++) {
+                            MapConfig mm = ms.get(i);
+                            if (i > 0) sb.append("<gray>, ");
+                            sb.append("<click:run_command:'/mgp setup modes ").append(mm.id).append("'><hover:show_text:'Режимы карты'>")
+                                    .append(plugin.sessions().playable(mm) ? "<white>" : "<red>").append(mm.id).append("</hover></click>");
+                        }
+                        p.sendMessage(Msg.parse(sb.toString()));
+                    }
+                    Msg.send(p, "<gray>Клик по карте — выбрать её режимы. Красным — карта без шаблона или спавнов.");
+                }
                 case "alsomode" -> {
                     need(a, 3);
                     String md = a[2].toLowerCase(Locale.ROOT);
@@ -449,7 +480,7 @@ public final class MgpCommand implements TabExecutor {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
                     if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
-                    Msg.send(p, "<gold>" + m.id + "</gold> режим=" + m.mode + " шаблон=" + m.template
+                    Msg.send(p, "<gold>" + m.id + "</gold> режимы=" + m.mode + (m.alsoModes.isEmpty() ? "" : ", " + String.join(", ", m.alsoModes)) + " шаблон=" + m.template
                             + (plugin.worlds().templateExists(m.template) ? " <green>✔" : " <red>(шаблона нет!)"));
                     Msg.send(p, "<gray>спавнов " + m.spawns.size() + ", сундуков " + m.chests.size() + ", торговцев "
                             + m.traders.size() + ", триггеров " + m.triggers.size() + ", участков " + m.plots.size());
@@ -991,7 +1022,7 @@ public final class MgpCommand implements TabExecutor {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
                 out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest",
-                        "trader", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
+                        "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "trigger", "script", "scripts", "waiting", "lobby", "info"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
                 if (sub.equals("face")) out.addAll(a.length == 3 ? List.of(SelectionOps.IDS) : a.length == 4 ? List.of("here", "+1", "-1", "+10", "-10") : List.of());
@@ -1011,6 +1042,8 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("hold", "button", "plate", "zone", "tphere", "action", "set", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script") && a[4].equalsIgnoreCase("set")) {
                 out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
+            } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("modes")) {
+                plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
                 out.addAll(List.of("all", "seeker", "hider", "defenders", "attackers"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
