@@ -239,7 +239,7 @@ public final class MgpCommand implements TabExecutor {
                     "<yellow>/mgp setup pos1 | pos2</yellow> — углы области (рамка видна частицами)",
                     "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
                     "<yellow>/mgp setup teamspawn <карта> <команда|all> [группа] [locked]</yellow> — спавн команды (seeker, hider...) или закрытый до триггера",
-                    "<yellow>/mgp setup fortress <карта> [clear]</yellow> — крепость для осады из выделения (спавны: teamspawn defenders / attackers)",
+                    "<yellow>/mgp setup fortress <карта> [clear|list|del <n>|tp <n>]</yellow> — крепость для осады из выделения (спавны: teamspawn defenders / attackers)",
                     "<yellow>/mgp setup objective <карта> <id> <процент></yellow> — цель на разрушение из выделения; <yellow>objective ... action</yellow>, <yellow>objectives <карта></yellow>",
                     "<yellow>/mgp setup sel</yellow> — меню граней выделения; <yellow>face <грань> <коорд.|+n|-n|here></yellow>, <yellow>box x1 y1 z1 x2 y2 z2</yellow>",
                     "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
@@ -313,10 +313,30 @@ public final class MgpCommand implements TabExecutor {
                 }
                 case "objective" -> objective(p, a);
                 case "fortress" -> {
-                    // /mgp setup fortress <карта> [clear] — область крепости для осады из выделения pos1/pos2
+                    // /mgp setup fortress <карта> [clear | list | del <n> | tp <n>] — области крепости для осады из выделения pos1/pos2
                     need(a, 2);
                     if (a.length > 2 && a[2].equalsIgnoreCase("clear")) {
                         edit(p, a, 2, y -> y.set("fortress", null), "Крепость убрана");
+                        return;
+                    }
+                    MapConfig fm = plugin.registry().map(a[1]);
+                    if (fm == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    if (a.length > 2 && a[2].equalsIgnoreCase("list")) { listFortress(p, fm); return; }
+                    if (a.length > 3 && (a[2].equalsIgnoreCase("del") || a[2].equalsIgnoreCase("tp"))) {
+                        int n = Integer.parseInt(a[3]);
+                        if (n < 1 || n > fm.fortress.size()) { Msg.send(p, "<red>Нет части крепости №" + n + " (всего " + fm.fortress.size() + ")"); return; }
+                        if (a[2].equalsIgnoreCase("tp")) {
+                            ru.mgp.util.Region r = fm.fortress.get(n - 1);
+                            p.teleport(new Location(mapWorld(p, fm), (r.minX() + r.maxX() + 1) / 2.0, r.maxY() + 2, (r.minZ() + r.maxZ() + 1) / 2.0, p.getLocation().getYaw(), 60));
+                            org.bukkit.World fw = mapWorld(p, fm);
+                            if (p.getWorld().equals(fw)) PlotSetup.show(plugin, p, fw, fm, 20);
+                            return;
+                        }
+                        edit(p, a, 4, y -> {
+                            List<Map<?, ?>> l = new ArrayList<>(y.getMapList("fortress"));
+                            l.remove(n - 1);
+                            y.set("fortress", l.isEmpty() ? null : l);
+                        }, "Часть крепости №" + n + " удалена (номера остальных сдвинулись)");
                         return;
                     }
                     Pos[] sel = selection(p);
@@ -327,8 +347,8 @@ public final class MgpCommand implements TabExecutor {
                         m.put("min", r.min().serialize());
                         m.put("max", r.max().serialize());
                         addMap(y, "fortress", m);
-                    }, "Область крепости добавлена (" + (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1)
-                            + "). Ещё область — выдели и введи команду снова; убрать всё — /mgp setup fortress " + a[1] + " clear");
+                    }, "Часть крепости №" + (fm.fortress.size() + 1) + " добавлена (" + (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1)
+                            + "). Ещё часть — выдели и введи команду снова; список — /mgp setup fortress " + a[1] + " list, показать — /mgp setup show " + a[1]);
                 }
                 case "objectives" -> listObjectives(p, a);
                 case "tpspawn" -> {
@@ -511,11 +531,12 @@ public final class MgpCommand implements TabExecutor {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
                     if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
-                    int sec = a.length > 2 ? Math.max(1, Math.min(300, Integer.parseInt(a[2]))) : 30;
+                    int sec = a.length > 2 ? Math.max(0, Math.min(600, Integer.parseInt(a[2]))) : 60;
+                    if (sec == 0) { PlotSetup.stop(p); Msg.send(p, "<gray>Подсветка убрана"); return; }
                     org.bukkit.World w = mapWorld(p, m);
                     if (!p.getWorld().equals(w)) { Msg.send(p, "<red>Карта " + m.id + " в мире " + w.getName() + " — перейди туда"); return; }
                     PlotSetup.show(plugin, p, w, m, sec);
-                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>");
+                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>, <light_purple>крепость</light_purple>, <gray>цели</gray>; убрать — /mgp setup show " + m.id + " 0");
                 }
                 case "trigger" -> {
                     need(a, 3);
@@ -936,6 +957,20 @@ public final class MgpCommand implements TabExecutor {
 
     // ------------------------------------------------------------------ билд баттл: участки и стены
 
+    private void listFortress(Player p, MapConfig m) {
+        if (m.fortress.isEmpty()) { Msg.send(p, "<gray>Крепости нет. Выдели часть (pos1/pos2) и: /mgp setup fortress " + m.id); return; }
+        Msg.send(p, "<gold>Части крепости " + m.id + " (" + m.fortress.size() + "):");
+        for (int i = 0; i < m.fortress.size(); i++) {
+            ru.mgp.util.Region r = m.fortress.get(i);
+            p.sendMessage(Msg.parse(String.format(Locale.ROOT,
+                    "<gray>%d.</gray> <white>%s</white> <dark_gray>(%d %d %d … %d %d %d)</dark_gray> "
+                            + "<aqua><click:run_command:'/mgp setup fortress %s tp %d'><hover:show_text:'Телепорт и подсветка'>[тп]</hover></click></aqua> "
+                            + "<red><click:suggest_command:'/mgp setup fortress %s del %d'><hover:show_text:'Удалить часть'>[x]</hover></click></red>",
+                    i + 1, dims(r), r.minX(), r.minY(), r.minZ(), r.maxX(), r.maxY(), r.maxZ(), m.id, i + 1, m.id, i + 1)));
+        }
+        p.sendMessage(Msg.parse("<aqua><click:run_command:'/mgp setup show " + m.id + "'>[показать все частицами]</click></aqua>"));
+    }
+
     private void listPlots(Player p, String[] a) {
         need(a, 2);
         MapConfig m = plugin.registry().map(a[1]);
@@ -1215,6 +1250,11 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {
                 out.addAll(List.of("spawns:", "title:", "message:", "sound:", "mode:"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("fortress")) {
+                out.addAll(List.of("list", "tp", "del", "clear"));
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("fortress") && (a[3].equalsIgnoreCase("tp") || a[3].equalsIgnoreCase("del"))) {
+                MapConfig mc = plugin.registry().map(a[2]);
+                if (mc != null) for (int i = 1; i <= mc.fortress.size(); i++) out.add(String.valueOf(i));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("zone")) {
                 out.add("clear");
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamzone")) {

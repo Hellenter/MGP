@@ -69,6 +69,8 @@ public final class MapConfig {
     public final List<Region> walls = new ArrayList<>();
     /** Билд баттл: центр арены, куда переносит всех после стройки и в конце (по умолчанию spectator). */
     public final Pos arena;
+    /** Осада: части крепости (fortress). */
+    public final List<Region> fortress = new ArrayList<>();
     /** Play-зона: игроки не выходят за эти области (объединение); пусто — без ограничения. */
     public final List<Region> playZone = new ArrayList<>();
     /** Стартовые зоны команд (например attackers / defenders в осаде); снимаются по таймеру или действию zones: open. */
@@ -169,6 +171,7 @@ public final class MapConfig {
                     Pos.parse(Cfg.str(m, "spawn", null))));
         }
         playZone.addAll(regions(y.getMapList("play-zone")));
+        fortress.addAll(regions(y.getMapList("fortress")));
         org.bukkit.configuration.ConfigurationSection tz = y.getConfigurationSection("team-zones");
         if (tz != null) for (String team : tz.getKeys(false)) {
             List<Region> l = regions(tz.getMapList(team));
