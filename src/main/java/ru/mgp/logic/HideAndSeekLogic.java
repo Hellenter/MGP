@@ -54,6 +54,9 @@ public final class HideAndSeekLogic extends GameLogic {
     private final int hideTime;
     private final boolean caughtBecomeSeeker;
     private final int hitsToKill;
+    private final double seekerDamage;
+    private final double tauntHeal;
+    private final int tauntCooldown;
     private final double seekerSpeed;
     private final boolean provocationItems;
     private final String weaponName;
@@ -85,6 +88,9 @@ public final class HideAndSeekLogic extends GameLogic {
         int htk = st.getInt("hits-to-kill", prop ? 0 : 3);
         if (!st.contains("hits-to-kill") && st.getBoolean("one-hit", false)) htk = 1;
         hitsToKill = Math.max(0, htk);
+        seekerDamage = Math.max(0, st.getDouble("seeker-damage", prop ? 0 : 9)); // HP за полный удар, без критов; 0 — hits-to-kill
+        tauntHeal = Math.max(0, st.getDouble("taunt-heal", prop ? 0 : 2));       // HP прячущемуся за таунт
+        tauntCooldown = Math.max(0, st.getInt("taunt-cooldown", prop ? 0 : 40)); // общая перезарядка всех таунтов, сек.
         seekerSpeed = st.getDouble("seeker-speed", prop ? 0 : 5);
         provocationItems = st.getBoolean("provocation-items", true);
         weaponName = st.getString("seeker-weapon-name", prop ? "<red><bold>Оружие ищущего" : "<red><bold>Нож");
@@ -176,7 +182,8 @@ public final class HideAndSeekLogic extends GameLogic {
     private void giveSeeker(Player p) {
         var inv = p.getInventory();
         inv.clear();
-        inv.setItem(0, Items.icon(seekerWeapon, weaponName, List.of(hitsToKill == 1 ? "<gray>Один удар — и прячущийся пойман"
+        inv.setItem(0, Items.icon(seekerWeapon, weaponName, List.of(seekerDamage > 0 ? "<gray>Удар: " + hp(seekerDamage) + "❤"
+                : hitsToKill == 1 ? "<gray>Один удар — и прячущийся пойман"
                 : hitsToKill > 1 ? "<gray>Ловит с " + hitsToKill + " ударов" : "<gray>Бей прячущихся"), false));
         if (provocationItems) {
             int slot = 1; // каждая провокация — свой предмет, перезарядка видна на самом предмете
@@ -425,9 +432,9 @@ public final class HideAndSeekLogic extends GameLogic {
 
     private void hit(Player seeker, Player hider, double strength) {
         double dmg;
-        if (hitsToKill > 0) {
-            if (strength >= 0.9) strength = 1.0; // почти полный заряд считаем полным, иначе «3 удара» превращаются в 4
-            dmg = maxHealth(hider) / hitsToKill * strength;
+        if (seekerDamage > 0 || hitsToKill > 0) {
+            if (strength >= 0.9) strength = 1.0; // почти полный заряд считаем полным; критов нет (сила не больше 1)
+            dmg = (seekerDamage > 0 ? seekerDamage : maxHealth(hider) / hitsToKill) * strength;
         } else {
             dmg = attackDamage(seeker) * strength;
         }
@@ -435,10 +442,16 @@ public final class HideAndSeekLogic extends GameLogic {
         Location at = prop && displays.containsKey(hider.getUniqueId()) ? displays.get(hider.getUniqueId()).getLocation().add(0.5, 0.5, 0.5) : hider.getLocation().add(0, 1, 0);
         w.playSound(at, Sound.ENTITY_PLAYER_HURT, 1f, 1f);
         w.spawnParticle(Particle.DAMAGE_INDICATOR, at, 4, 0.2, 0.2, 0.2, 0.1);
-        if (hitsToKill == 1 || hider.getHealth() - dmg <= 0.05) { caught(hider, seeker); return; }
+        if ((seekerDamage <= 0 && hitsToKill == 1) || hider.getHealth() - dmg <= 0.05) { caught(hider, seeker); return; }
         hider.setHealth(hider.getHealth() - dmg);
         hider.playHurtAnimation(0);
-        seeker.sendActionBar(Msg.parse("<red>Попал! <gray>Осталось " + String.format(Locale.ROOT, "%.1f", hider.getHealth() / 2) + "❤"));
+        seeker.sendActionBar(Msg.parse("<red>Попал! <gray>Осталось " + hp(hider.getHealth()) + "❤"));
+    }
+
+    /** HP в сердцах для текста: 9 → «4.5», 2 → «1». */
+    private static String hp(double health) {
+        double h = health / 2;
+        return h == Math.rint(h) ? String.valueOf((long) h) : String.format(Locale.ROOT, "%.1f", h);
     }
 
     private void caught(Player hider, Player seeker) {
@@ -541,13 +554,13 @@ public final class HideAndSeekLogic extends GameLogic {
             {
                 int slot = 0;
                 for (Effect ef : list) {
-                    long left = cooldownLeft(p, ef);
+                    long left = taunt ? tauntLeft(p, ef) : cooldownLeft(p, ef);
                     List<String> lore;
                     if (taunt) {
                         lore = new ArrayList<>(ef.lore());
                         lore.add("");
-                        lore.add("<light_purple>+" + ef.points() + " очк.");
-                        lore.add("<gray>Перезарядка: " + ef.cooldown() + " сек.");
+                        lore.add("<light_purple>+" + ef.points() + " очк." + (tauntHeal > 0 ? " <red>+" + hp(tauntHeal) + "❤" : ""));
+                        lore.add("<gray>Перезарядка: " + Math.max(ef.cooldown(), tauntCooldown) + " сек." + (tauntCooldown > 0 ? " (общая для всех таунтов)" : ""));
                         lore.add(left > 0 ? "<red>Ещё " + left + " сек." : "<green>▶ Нажми");
                     } else {
                         lore = provokeLore(ef, left);
@@ -574,11 +587,33 @@ public final class HideAndSeekLogic extends GameLogic {
         return true;
     }
 
+    private static final String TAUNT_SHARED = "#taunt";
+
+    /** Сколько ждать до таунта: его собственная перезарядка или общая (taunt-cooldown), что дольше. */
+    private long tauntLeft(Player p, Effect ef) {
+        Long shared = cooldowns.get(p.getUniqueId() + ":" + TAUNT_SHARED);
+        long s = shared == null ? 0 : Math.max(0, (shared - System.currentTimeMillis() + 999) / 1000);
+        return Math.max(s, cooldownLeft(p, ef));
+    }
+
     private void taunt(Player p, Effect ef) {
-        if (!session.isPlaying() || !isHider(p) || !useCooldown(p, ef)) return;
+        if (!session.isPlaying() || !isHider(p)) return;
+        long left = tauntLeft(p, ef);
+        if (left > 0) { p.sendActionBar(Msg.parse("<red>Перезарядка: ещё " + left + " сек.")); return; }
+        long now = System.currentTimeMillis();
+        cooldowns.put(p.getUniqueId() + ":" + ef.id(), now + ef.cooldown() * 1000L);
+        if (tauntCooldown > 0) cooldowns.put(p.getUniqueId() + ":" + TAUNT_SHARED, now + tauntCooldown * 1000L);
         emit(p, ef);
         points.merge(p.getUniqueId(), ef.points(), Integer::sum);
-        p.sendActionBar(Msg.parse("<light_purple>Таунт «" + ef.display() + "<light_purple>»: +" + ef.points() + " очк."));
+        String healed = "";
+        if (tauntHeal > 0) {
+            double before = p.getHealth(), after = Math.min(maxHealth(p), before + tauntHeal);
+            if (after > before) {
+                p.setHealth(after); // напрямую, мимо no-regen
+                healed = " <red>+" + hp(after - before) + "❤";
+            }
+        }
+        p.sendActionBar(Msg.parse("<light_purple>Таунт «" + ef.display() + "<light_purple>»: +" + ef.points() + " очк." + healed));
     }
 
     /** Звук, частицы или фейерверк из места, где прячется игрок (слышно и видно всем). */
