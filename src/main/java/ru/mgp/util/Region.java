@@ -18,6 +18,13 @@ public record Region(int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
         return x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ;
     }
 
+    /** Насколько точка снаружи области по горизонтали (0 — над/под ней или внутри), с запасом margin блоков. */
+    public double outsideXZ(Location l, int margin) {
+        double dx = Math.max(Math.max(minX - margin - l.getX(), l.getX() - (maxX + 1 + margin)), 0);
+        double dz = Math.max(Math.max(minZ - margin - l.getZ(), l.getZ() - (maxZ + 1 + margin)), 0);
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
     /** Проверка с запасом по краям (для удержания игрока на участке). */
     public boolean containsLoose(Location l, int margin) {
         return l.getBlockX() >= minX - margin && l.getBlockX() <= maxX + margin

@@ -15,9 +15,9 @@ import java.util.*;
 
 /**
  * Play-зона карты (maps/<карта>.yml → play-zone) и стартовые зоны команд (team-zones).
- * Дойти до края нельзя — игрока мягко останавливает, у края видна аккуратная сетка частиц (только ему).
- * Кто всё же оказался снаружи (отбросило взрывом, застрял, провалился) — возвращается на последнее
- * место внутри зоны, а если его нет — на спавн своей команды.
+ * Граница — барьер: пройти за неё нельзя (запас settings.zone-margin блоков, по умолчанию 0), у края видна
+ * сетка частиц (только этому игроку). Никого никуда не телепортирует: кто оказался снаружи (отбросило взрывом),
+ * может идти только обратно к зоне.
  * Зоны команд снимаются через team-zones-open секунд после старта или действием zones: open.
  */
 public final class PlayZone {
@@ -27,7 +27,6 @@ public final class PlayZone {
     private final GameSession s;
     private boolean teamOpen;
     private int openAt; // секунда игры, когда снять зоны команд; 0 — только действием
-    private final Map<UUID, Location> lastInside = new HashMap<>();
     private final Map<UUID, Long> lastDraw = new HashMap<>();
     private final Map<UUID, Long> lastWarn = new HashMap<>();
 
@@ -41,7 +40,6 @@ public final class PlayZone {
     }
 
     void start() {
-        lastInside.clear();
         teamOpen = false;
         MapConfig m = map();
         if (m == null) return;
@@ -54,11 +52,9 @@ public final class PlayZone {
 
     void tick() {
         if (!teamOpen && openAt > 0 && s.elapsed() >= openAt && !map().teamZones.isEmpty()) setTeamZones(true);
-        if (!active()) return;
-        // раз в секунду: тех, кто оказался снаружи без движения (телепорт, толчок, застрял в блоках), возвращаем
-        for (Player p : s.alivePlayers())
-            if (p.getGameMode() != org.bukkit.GameMode.SPECTATOR && !allowed(p, p.getLocation())) bringBack(p, null);
     }
+
+    private int margin() { return Math.max(0, s.mode.settings.getInt("zone-margin", 0)); }
 
     /** Снять (true) или вернуть (false) границы между командами. */
     public void setTeamZones(boolean open) {
@@ -88,9 +84,29 @@ public final class PlayZone {
         return true;
     }
 
-    private static boolean inAny(List<Region> l, Location loc) {
-        for (Region r : l) if (r.contains(loc)) return true;
+    private boolean inAny(List<Region> l, Location loc) {
+        int mg = margin();
+        for (Region r : l) if (mg == 0 ? r.contains(loc) : r.containsLoose(loc, mg)) return true;
         return false;
+    }
+
+    /** Насколько игрок снаружи разрешённой зоны по горизонтали (0 — внутри или над/под ней). */
+    private double outside(Player p, Location l) {
+        MapConfig m = map();
+        double d = 0;
+        if (!m.playZone.isEmpty()) d = nearest(m.playZone, l);
+        if (!teamOpen && !m.teamZones.isEmpty()) {
+            String team = s.logic().zoneTeam(p);
+            List<Region> tz = team == null ? null : m.teamZones.get(team.toLowerCase(Locale.ROOT));
+            if (tz != null) d = Math.max(d, nearest(tz, l));
+        }
+        return d;
+    }
+
+    private double nearest(List<Region> l, Location loc) {
+        double best = Double.MAX_VALUE;
+        for (Region r : l) best = Math.min(best, r.outsideXZ(loc, margin()));
+        return best;
     }
 
     public void onMove(PlayerMoveEvent e) {
@@ -99,11 +115,11 @@ public final class PlayZone {
         if (p.getGameMode() == org.bukkit.GameMode.SPECTATOR) return; // ждёт возрождения — летает где угодно
         Location to = e.getTo();
         if (allowed(p, to)) {
-            lastInside.put(p.getUniqueId(), to.clone());
             drawEdges(p, to);
             return;
         }
-        if (allowed(p, e.getFrom())) {
+        if (allowed(p, e.getFrom()) || outside(p, to) > outside(p, e.getFrom()) + 1e-6) {
+            // барьер: дальше не пускаем; снаружи (отбросило) можно только идти обратно к зоне
             Location back = e.getFrom().clone();
             back.setYaw(to.getYaw());
             back.setPitch(to.getPitch());
@@ -111,8 +127,6 @@ public final class PlayZone {
             p.setVelocity(new org.bukkit.util.Vector(0, Math.min(0, p.getVelocity().getY()), 0));
             drawEdges(p, back);
             warn(p, "<red>Дальше нельзя");
-        } else {
-            bringBack(p, e);
         }
     }
 
@@ -125,19 +139,6 @@ public final class PlayZone {
             e.setCancelled(true);
             warn(e.getPlayer(), "<red>Туда нельзя — это за границей");
         }
-    }
-
-    private void bringBack(Player p, PlayerMoveEvent e) {
-        Location back = lastInside.get(p.getUniqueId());
-        if (back == null || !allowed(p, back) || !back.getBlock().isPassable()) {
-            back = s.spawnFor(s.logic().zoneTeam(p));
-            if (!allowed(p, back)) return; // спавн сам за границей — ошибка карты, не мучаем игрока
-        }
-        if (e != null) e.setTo(back);
-        else p.teleport(back);
-        p.setVelocity(new org.bukkit.util.Vector());
-        p.setFallDistance(0);
-        warn(p, "<red>Ты вышел за границу карты — возвращаем");
     }
 
     private void warn(Player p, String text) {
@@ -164,9 +165,10 @@ public final class PlayZone {
         }
         double x = at.getX(), y = at.getY() + 1, z = at.getZ();
         for (Region r : boxes) {
-            if (!r.contains(at)) continue;
+            int mg = margin();
+            if (!r.containsLoose(at, mg)) continue;
             boolean isTeam = team && !m.playZone.contains(r);
-            double[] faces = {r.minX(), r.maxX() + 1, r.minZ(), r.maxZ() + 1};
+            double[] faces = {r.minX() - mg, r.maxX() + 1 + mg, r.minZ() - mg, r.maxZ() + 1 + mg};
             for (int i = 0; i < 4; i++) {
                 boolean alongX = i < 2;
                 double d = Math.abs((alongX ? x : z) - faces[i]);
@@ -200,13 +202,11 @@ public final class PlayZone {
     }
 
     void clear(Player p) {
-        lastInside.remove(p.getUniqueId());
         lastDraw.remove(p.getUniqueId());
         lastWarn.remove(p.getUniqueId());
     }
 
     void clearAll() {
-        lastInside.clear();
         lastDraw.clear();
         lastWarn.clear();
         teamOpen = false;

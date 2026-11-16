@@ -392,16 +392,15 @@ public final class BuildBattleLogic extends GameLogic {
         MapConfig.Plot plot = plotOf.get(e.getPlayer().getUniqueId());
         if (plot == null) return;
         if (!plot.region().containsLoose(e.getTo(), plotMargin)) {
-            // мягко: останавливаем у края, а на спавн участка — только если уже снаружи (отбросило, телепорт)
-            if (plot.region().containsLoose(e.getFrom(), plotMargin)) {
+            // барьер: у края останавливает, никуда не телепортирует; снаружи можно идти только обратно к участку
+            boolean wasInside = plot.region().containsLoose(e.getFrom(), plotMargin);
+            if (wasInside || plot.region().outsideXZ(e.getTo(), plotMargin) > plot.region().outsideXZ(e.getFrom(), plotMargin) + 1e-6) {
                 org.bukkit.Location back = e.getFrom().clone();
                 back.setYaw(e.getTo().getYaw());
                 back.setPitch(e.getTo().getPitch());
                 e.setTo(back);
-            } else {
-                e.setTo(plot.spawn().toLocation(session.gameWorld()));
+                e.getPlayer().sendActionBar(Msg.parse("<red>Нельзя покидать свой участок"));
             }
-            e.getPlayer().sendActionBar(Msg.parse("<red>Нельзя покидать свой участок"));
         }
     }
 
