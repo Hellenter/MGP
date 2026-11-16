@@ -177,6 +177,12 @@ public final class HideAndSeekLogic extends GameLogic {
     }
 
     private boolean isSeeker(Player p) { return roles.get(p.getUniqueId()) == Role.SEEKER; }
+
+    @Override
+    public String zoneTeam(Player p) {
+        Role r = roles.get(p.getUniqueId());
+        return r == null ? null : r == Role.SEEKER ? "seeker" : "hider";
+    }
     private boolean isHider(Player p) { return roles.get(p.getUniqueId()) == Role.HIDER && session.isAlive(p); }
 
     private void giveSeeker(Player p) {

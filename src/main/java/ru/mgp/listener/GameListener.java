@@ -149,10 +149,18 @@ public final class GameListener implements Listener {
         GameSession s = of(p);
         if (s == null) return;
         if (active(s, p)) {
+            s.zone().onMove(e);
             s.logic().onMove(e);
         } else if (s.waitingWorld() != null && p.getWorld().equals(s.waitingWorld()) && e.getTo().getY() < s.waitingVoidY()) {
             e.setTo(s.waitingSpawn().toLocation(s.waitingWorld()));
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onTeleport(org.bukkit.event.player.PlayerTeleportEvent e) {
+        Player p = e.getPlayer();
+        GameSession s = of(p);
+        if (active(s, p)) s.zone().onTeleport(e);
     }
 
     @EventHandler(ignoreCancelled = true)

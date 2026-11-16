@@ -52,6 +52,7 @@ public final class ActionInfo {
             case "border" -> Material.IRON_BARS;
             case "refill-chests" -> Material.CHEST_MINECART;
             case "spawns" -> Material.RESPAWN_ANCHOR;
+            case "zones" -> Material.OAK_FENCE_GATE;
             default -> Material.WRITABLE_BOOK;
         };
     }
@@ -71,6 +72,7 @@ public final class ActionInfo {
             case "particle", "particles" -> "частицы";
             case "wait" -> "пауза " + arg(raw) + " с";
             case "spawns" -> (arg(raw).startsWith("disable") ? "закрыть" : "открыть") + " спавны";
+            case "zones" -> (arg(raw).startsWith("close") ? "разделить" : "открыть") + " зоны команд";
             case "command" -> "команда";
             default -> type(raw);
         };
