@@ -163,6 +163,14 @@ public final class GameListener implements Listener {
         if (!active(s, p) || s.mode.settings.getBoolean("disable-hunger", false)) e.setCancelled(true);
     }
 
+    /** settings.no-regen: здоровье само не восстанавливается (сытость, зелья и т.п.). */
+    @EventHandler(ignoreCancelled = true)
+    public void onRegen(org.bukkit.event.entity.EntityRegainHealthEvent e) {
+        if (!(e.getEntity() instanceof Player p)) return;
+        GameSession s = of(p);
+        if (s != null && s.isPlaying() && s.mode.settings.getBoolean("no-regen", false)) e.setCancelled(true);
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent e) {
         if (e.getEntity() instanceof Player p) {

@@ -68,11 +68,16 @@ settings:
   seekers: 1                       # сколько ищущих минимум
   seeker-ratio: 0.2                # или доля от игроков (берётся большее)
   caught: seeker                   # seeker — пойманный ищет вместе со всеми | spectator — выбывает
-  one-hit: true                    # один удар ловит прячущегося
-  seeker-weapon: STICK
+  hits-to-kill: 3                  # нож ловит прячущегося с N полных ударов (1 — с одного; 0 — по урону оружия)
+  seeker-weapon: IRON_SWORD
+  seeker-weapon-name: "<red><bold>Нож"
+  seeker-speed: 5                  # ищущий быстрее прячущихся на N процентов (0 — как все)
+  provocation-items: true          # каждая провокация — отдельный предмет в хотбаре (false — одно меню через рог)
   auto-taunt: 60                   # раз в N сек. все прячущиеся сами издают случайный звук (0 — выкл.)
   hide-nametags: true              # ники над головами не видно никому (ни через стены, ни вблизи)
-  disable-hunger: true
+  disable-hunger: true             # голод не тратится
+  no-regen: true                   # здоровье само не восстанавливается
+  # Ищущий не получает урона ни от чего (падение, огонь, удары); в пустоте — обратно на спавн ищущих
   # (необязательно) seeker-spawn в файле карты — комната, где ищущие ждут hide-time
 
   # Таунты прячущихся: звук/частицы из места, где ты прячешься. Дают очки (рискуешь — получаешь).
@@ -85,12 +90,14 @@ settings:
     - { id: firework, display: "<red><bold>Салют",      icon: FIREWORK_ROCKET, sound: "minecraft:entity.firework_rocket.launch", type: firework,    cooldown: 45, points: 8,
         lore: ["<gray>Видно на всю карту"] }
 
-  # Провокации ищущих: заставляют ВСЕХ прячущихся выдать себя.
-  # type: sound (звук из места прячущегося) | glow (подсветка сквозь стены на duration сек.)
-  #       | particles (частицы над прячущимся duration сек.) | firework (салют над прячущимся)
+  # Провокации ищущих (у каждой свой предмет). type: sound (звук из места прячущегося)
+  #   | glow (подсветка сквозь стены на duration сек.) | particles (частицы duration сек.) | firework (салют)
+  # target: all — все прячущиеся | nearest — только ближайший к ищущему
+  # max-hiders: N — доступна, когда прячущихся N или меньше; max-time-left: N — когда до конца N сек. или меньше
   provocations:
-    - { id: shout,  display: "<yellow>Эй, ты где?",       icon: BELL,             sound: "minecraft:entity.chicken.ambient", volume: 2.5, particle: NOTE, type: sound, cooldown: 30 }
-    - { id: smoke,  display: "<gray>Дымовой след",        icon: CAMPFIRE,         particle: CAMPFIRE_COSY_SMOKE, type: particles, duration: 5, cooldown: 60 }
-    - { id: rocket, display: "<red>Салют над головой",    icon: FIREWORK_ROCKET,  sound: "minecraft:entity.firework_rocket.launch", type: firework, cooldown: 90 }
-    - { id: glow,   display: "<aqua><bold>Подсветка",     icon: GLOWSTONE_DUST,   type: glow, duration: 3, cooldown: 120,
-        lore: ["<gray>Прячущиеся светятся сквозь стены 3 сек."] }
+    - { id: provoke, display: "<yellow>Провокация", icon: BELL, sound: "minecraft:entity.chicken.ambient", volume: 2.5, particle: NOTE,
+        type: sound, target: nearest, cooldown: 90,
+        lore: ["<gray>Ближайший прячущийся издаёт звук"] }
+    - { id: glow, display: "<aqua><bold>Подсветка", icon: GLOWSTONE_DUST, type: glow, duration: 6, cooldown: 120,
+        max-hiders: 2, max-time-left: 360,
+        lore: ["<gray>Прячущиеся светятся сквозь стены 6 сек."] }
