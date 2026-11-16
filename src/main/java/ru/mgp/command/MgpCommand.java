@@ -158,7 +158,8 @@ public final class MgpCommand implements TabExecutor {
         String modeId = a.length > 1 ? a[1] : "hunger_games";
         ModeConfig m = plugin.registry().mode(modeId);
         if (m == null) { Msg.send(s, "<red>Нет режима " + Msg.esc(modeId)); return; }
-        Msg.send(s, "<gold>Таблицы лута " + m.id + ": <white>" + m.loot.keySet());
+        Msg.send(s, "<gold>Таблицы лута " + m.id + ": <white>" + m.loot.keySet() + "</white>, лут в сундуках: "
+                + (m.chestLoot() ? "<green>да" : "<red>нет") + "<gold>, маркеры: <white>" + m.lootMarkers);
         List<String> unknown = new ArrayList<>();
         Set<org.bukkit.Material> br = ru.mgp.util.Cfg.materials(m.settings.getStringList("breakable-blocks"), unknown);
         StringBuilder sample = new StringBuilder();
@@ -177,11 +178,12 @@ public final class MgpCommand implements TabExecutor {
                     var dim = ru.mgp.world.RegionCutter.findOverworldDir(plugin.worlds().templatesDir().resolve(map.template));
                     Map<String, String> tiers = ru.mgp.util.Cfg.chestTiers(plugin.getConfig());
                     Map<String, Integer> byTier = new TreeMap<>();
-                    for (var f : ru.mgp.world.ChestScanner.scan(dim, r.minX(), r.minZ(), r.maxX(), r.maxZ())) {
-                        String t = tiers.get(f.type());
-                        if (t != null) byTier.merge(t + (m.loot.containsKey(t) ? "" : "(нет таблицы!)"), 1, Integer::sum);
-                    }
-                    Msg.send(s, "<gold>Сундуки в шаблоне " + map.template + ": <white>" + byTier + "</white>, в списке карты: " + map.chests.size());
+                    var found = ru.mgp.world.ChestScanner.scan(dim, r.minX(), r.minZ(), r.maxX(), r.maxZ());
+                    var marked = ru.mgp.world.ChestScanner.marked(found, m.lootMarkers);
+                    for (var t : ru.mgp.world.ChestScanner.tiers(found, m.lootMarkers, tiers))
+                        byTier.merge(t.tier() + (m.loot.containsKey(t.tier()) ? "" : "(нет таблицы!)"), 1, Integer::sum);
+                    Msg.send(s, "<gold>Сундуки в шаблоне " + map.template + (marked.isEmpty() ? " (по типу блока)" : " (по маркерам)")
+                            + ": <white>" + byTier + "</white>, в списке карты: " + map.chests.size());
                 } catch (Exception ex) {
                     Msg.send(s, "<red>Ошибка чтения шаблона: " + Msg.esc(String.valueOf(ex.getMessage())));
                 }
