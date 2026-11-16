@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "MGP: военные инструменты для режима Штурм",
+    "min_format": 65,
+    "max_format": 200
+  }
+}

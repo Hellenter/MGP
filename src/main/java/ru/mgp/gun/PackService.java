@@ -24,23 +24,40 @@ import java.time.Duration;
 import java.util.*;
 
 /**
- * Ресурспак с моделями оружия (guns.yml → resource-pack): отправляется, пока игрок в сессии одного из режимов modes
+ * Ресурспак с моделями оружия (guns.yml → resource-pack) и дополнительные паки (extra, например военные
+ * инструменты): отправляются, пока игрок в сессии одного из режимов modes
  * (уже в лобби ожидания, чтобы успел скачаться), и снимается, когда он возвращается в хаб.
  */
 public final class PackService implements Listener {
     private final MGPPlugin plugin;
+    /** Пак инструментов в военном стиле (свой, лежит в репозитории MGP) — добавляется, если в guns.yml нет ключа extra. */
+    static final String DEFAULT_EXTRA = "https://raw.githubusercontent.com/Hellenter/MGP/main/packs/assault-tools.zip";
+
     private boolean enabled;
-    private String url = "";
-    private String hash = "";
     private boolean required;
     private String prompt = "";
     private final Set<String> modes = new HashSet<>();
-    private UUID packId;
-    /** Кому пак отправлен (и не снят). */
+    /** Первый — пак с оружием (от него зависят звуки и сообщения), дальше дополнительные паки поверх него. */
+    private final List<Pack> packs = new ArrayList<>();
+    /** Кому паки отправлены (и не сняты). */
     private final Set<UUID> sent = new HashSet<>();
-    /** У кого пак загружен. */
+    /** У кого загружен пак оружия. */
     private final Set<UUID> loaded = new HashSet<>();
     private int hashJob;
+    /** Есть ли пак оружия (url); без него в packs только дополнительные. */
+    private boolean gunPack;
+
+    private static final class Pack {
+        final String url;
+        final UUID id;
+        String hash;
+
+        Pack(String url, String hash) {
+            this.url = url;
+            this.hash = hash;
+            this.id = UUID.nameUUIDFromBytes(("mgp-pack:" + url).getBytes(StandardCharsets.UTF_8));
+        }
+    }
 
     PackService(MGPPlugin plugin) {
         this.plugin = plugin;
@@ -48,30 +65,36 @@ public final class PackService implements Listener {
     }
 
     void load(ConfigurationSection c) {
-        // снять старый пак у всех: адрес мог поменяться
+        // снять старые паки у всех: адреса могли поменяться
         for (UUID u : new ArrayList<>(sent)) {
             Player p = Bukkit.getPlayer(u);
-            if (p != null && packId != null) p.removeResourcePacks(packId);
+            if (p != null) for (Pack k : packs) p.removeResourcePacks(k.id);
         }
         sent.clear();
         loaded.clear();
+        packs.clear();
+        int job = ++hashJob;
         enabled = c != null && c.getBoolean("enabled", true);
-        url = c == null ? "" : c.getString("url", "").trim();
-        hash = c == null ? "" : c.getString("hash", "").trim().toLowerCase(Locale.ROOT);
         required = c != null && c.getBoolean("required", false);
         prompt = c == null ? "" : c.getString("prompt", "");
         modes.clear();
         if (c != null) for (String m : c.getStringList("modes")) modes.add(m.toLowerCase(Locale.ROOT));
-        if (url.isEmpty()) enabled = false;
-        packId = UUID.nameUUIDFromBytes(("mgp-pack:" + url).getBytes(StandardCharsets.UTF_8));
-        if (enabled && !hash.matches("[0-9a-f]{40}")) {
-            hash = "";
-            computeHash(url, ++hashJob);
+        String url = c == null ? "" : c.getString("url", "").trim();
+        String hash = c == null ? "" : c.getString("hash", "").trim().toLowerCase(Locale.ROOT);
+        gunPack = !url.isEmpty();
+        if (gunPack) packs.add(new Pack(url, hash.matches("[0-9a-f]{40}") ? hash : ""));
+        List<String> extra = c != null && c.contains("extra") ? c.getStringList("extra") : List.of(DEFAULT_EXTRA);
+        for (String e : extra) {
+            String u = e.trim();
+            if (!u.isEmpty() && packs.stream().noneMatch(k -> k.url.equals(u))) packs.add(new Pack(u, ""));
         }
+        if (packs.isEmpty()) enabled = false;
+        if (enabled) for (Pack k : packs) if (k.hash.isEmpty()) computeHash(k, job);
     }
 
     /** SHA-1 пака: клиент кэширует пак по хэшу и не качает его заново при каждом входе в режим. */
-    private void computeHash(String u, int job) {
+    private void computeHash(Pack k, int job) {
+        String u = k.url;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS)
@@ -89,11 +112,11 @@ public final class PackService implements Listener {
                 long kb = size / 1024;
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (job != hashJob) return;
-                    hash = h;
-                    plugin.getLogger().info("Ресурспак оружия: " + kb + " КБ, SHA-1 " + h);
+                    k.hash = h;
+                    plugin.getLogger().info("Ресурспак " + u + ": " + kb + " КБ, SHA-1 " + h);
                 });
             } catch (Exception e) {
-                plugin.getLogger().warning("Ресурспак оружия: не удалось скачать для подсчёта SHA-1 (" + e.getMessage()
+                plugin.getLogger().warning("Ресурспак " + u + ": не удалось скачать для подсчёта SHA-1 (" + e.getMessage()
                         + "). Пак отправляется без хэша — клиент будет качать его каждый раз.");
             }
         });
@@ -113,20 +136,21 @@ public final class PackService implements Listener {
             boolean want = wants(p);
             if (want && !sent.contains(u)) {
                 sent.add(u);
-                ResourcePackInfo info = ResourcePackInfo.resourcePackInfo(packId, URI.create(url), hash);
-                p.sendResourcePacks(ResourcePackRequest.resourcePackRequest().packs(info).replace(false)
+                List<ResourcePackInfo> infos = new ArrayList<>();
+                for (Pack k : packs) infos.add(ResourcePackInfo.resourcePackInfo(k.id, URI.create(k.url), k.hash));
+                p.sendResourcePacks(ResourcePackRequest.resourcePackRequest().packs(infos).replace(false)
                         .required(required).prompt(prompt.isBlank() ? null : Msg.parse(prompt)).build());
             } else if (!want && sent.contains(u)) {
                 sent.remove(u);
                 loaded.remove(u);
-                p.removeResourcePacks(packId);
+                for (Pack k : packs) p.removeResourcePacks(k.id);
             }
         }
     }
 
     @EventHandler
     public void onStatus(PlayerResourcePackStatusEvent e) {
-        if (packId == null || !packId.equals(e.getID())) return;
+        if (!gunPack || packs.isEmpty() || !packs.get(0).id.equals(e.getID())) return;
         Player p = e.getPlayer();
         switch (e.getStatus()) {
             case SUCCESSFULLY_LOADED -> loaded.add(p.getUniqueId());
