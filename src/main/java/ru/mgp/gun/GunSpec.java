@@ -9,8 +9,8 @@ import java.util.Locale;
 /** Одно оружие из guns.yml. */
 public record GunSpec(String id, String name, int model, String ammo, int magazine, double reload, boolean singleReload,
                       double damage, double headshot, double fireRate, List<FireMode> modes, int burst, int pellets,
-                      double spread, double aimSpread, double recoil, double range, double knockback, int zoom,
-                      boolean explosive, double speed, String sound, String reloadSound, List<String> lore) {
+                      double spread, double aimSpread, double recoil, double range, double effectiveRange, double minDamage,
+                      double knockback, int zoom, boolean explosive, String explosionType, boolean gravity, double speed, String sound, String reloadSound, List<String> lore) {
 
     public static final String AMMO_NONE = "none";
     public static final String AMMO_EXPLOSIVE = "explosive-arrow";
@@ -26,6 +26,13 @@ public record GunSpec(String id, String name, int model, String ammo, int magazi
 
     public boolean infiniteAmmo() { return AMMO_NONE.equalsIgnoreCase(ammo); }
     public boolean arrowAmmo() { return AMMO_EXPLOSIVE.equalsIgnoreCase(ammo); }
+
+    /** Множитель урона на дистанции: полный до effective-range, дальше линейно до min-damage на range. */
+    public double falloff(double dist) {
+        if (dist <= effectiveRange || range <= effectiveRange) return 1;
+        double k = Math.min(1, (dist - effectiveRange) / (range - effectiveRange));
+        return 1 - k * (1 - minDamage);
+    }
 
     public String label(FireMode m) { return m == FireMode.BURST ? m.label + " ×" + burst : m.label; }
 
@@ -56,9 +63,13 @@ public record GunSpec(String id, String name, int model, String ammo, int magazi
                 Math.max(0, c.getDouble("aim-spread", c.getDouble("spread", 2.0) / 2)),
                 c.getDouble("recoil", 1.0),
                 Math.max(1, c.getDouble("range", 60)),
+                Math.max(0, c.getDouble("effective-range", c.getDouble("range", 60))),
+                Math.max(0, Math.min(1, c.getDouble("min-damage", 0.4))),
                 Math.max(0, c.getDouble("knockback", 0.05)),
                 Math.max(0, Math.min(6, c.getInt("zoom", 0))),
                 explosive,
+                c.getString("explosion", "default"),
+                c.getBoolean("gravity", true),
                 Math.max(0.2, c.getDouble("speed", 2.0)),
                 c.getString("sound", "minecraft:entity.firework_rocket.blast"),
                 c.getString("reload-sound", "minecraft:block.iron_door.close"),

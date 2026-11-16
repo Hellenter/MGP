@@ -159,7 +159,7 @@ public final class GunService implements Listener {
         ItemMeta m = it.getItemMeta();
         m.displayName(Msg.item(g.name()));
         List<String> lore = new ArrayList<>(g.lore());
-        if (g.explosive()) lore.add("<gray>Стреляет разрывными стрелами");
+        if (g.explosive()) lore.add(g.arrowAmmo() ? "<gray>Стреляет разрывными стрелами" : "<gray>Взрывной снаряд");
         else lore.add("<gray>Урон: <white>" + fmt(g.damage()) + (g.pellets() > 1 ? " ×" + g.pellets() : "")
                 + " <dark_gray>· <gray>" + fmt(g.fireRate()) + " выстр./мин");
         lore.add("<gray>Магазин: <white>" + g.magazine() + " <dark_gray>· <gray>" + ammoName(g));
@@ -578,13 +578,15 @@ public final class GunService implements Listener {
         Random r = java.util.concurrent.ThreadLocalRandom.current();
 
         if (g.explosive()) {
-            String type = st.loaded.isEmpty() ? "default" : st.loaded.pollFirst();
+            // стрелы несут свой тип взрыва, у ракет и гранат он задан в explosion
+            String type = g.arrowAmmo() ? (st.loaded.isEmpty() ? "default" : st.loaded.pollFirst()) : g.explosionType();
             Vector v = spreadDir(dir, spread, r).multiply(g.speed());
             ItemStack arrowItem = Keys.explosive(new ItemStack(Material.ARROW), type);
             p.launchProjectile(Arrow.class, v, a -> {
                 a.setItemStack(arrowItem);
                 a.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
                 a.setCritical(false);
+                if (!g.gravity()) a.setGravity(false);
             });
         } else {
             GameSession s = plugin.sessions().of(p);
@@ -631,7 +633,7 @@ public final class GunService implements Listener {
         if (hit.getHitEntity() instanceof LivingEntity le) {
             var box = le.getBoundingBox();
             boolean head = hit.getHitPosition().getY() >= box.getMaxY() - box.getHeight() * 0.22;
-            double dmg = g.damage() * (head ? g.headshot() : 1);
+            double dmg = g.damage() * (head ? g.headshot() : 1) * g.falloff(hit.getHitPosition().distance(eye.toVector()));
             Shot prev = current;
             current = new Shot(le, g.knockback());
             try {
