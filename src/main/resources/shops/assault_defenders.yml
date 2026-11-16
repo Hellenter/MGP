@@ -61,15 +61,11 @@ categories:
   - name: "<gray>Патроны"
     icon: PHANTOM_MEMBRANE
     items:
-      - { item: "AMMO 9mm 30", price: "MONEY 40" }
-      - { item: "AMMO 762x25 71", price: "MONEY 80" }
-      - { item: "AMMO 50ae 14", price: "MONEY 60" }
-      - { item: "AMMO 556 30", price: "MONEY 60" }
-      - { item: "AMMO 762x39 30", price: "MONEY 70" }
-      - { item: "AMMO 9x39 20", price: "MONEY 70" }
-      - { item: "AMMO 762x54 20", price: "MONEY 90" }
-      - { item: "AMMO 792 10", price: "MONEY 60" }
-      - { item: "AMMO 338 10", price: "MONEY 120" }
+      - { item: "AMMO pistol 30", price: "MONEY 40" }
+      - { item: "AMMO pistol 71", price: "MONEY 80" }
+      - { item: "AMMO intermediate 30", price: "MONEY 60" }
+      - { item: "AMMO rifle 10", price: "MONEY 60" }
+      - { item: "AMMO rifle 100", price: "MONEY 450" }
       - { item: "AMMO shotgun 16", price: "MONEY 60" }
   - name: "<aqua>Броня"
     icon: IRON_CHESTPLATE

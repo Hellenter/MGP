@@ -8,11 +8,12 @@
 #   присед (Shift) — прицеливание: меньше разброс и отдача, у снайперских винтовок ещё и приближение
 #
 # Выдать: /mgp gun give <оружие> [игрок], /mgp gun ammo <патроны> [кол-во] [игрок], /mgp gun list
-# В магазинах и наборах: "GUN ak47" и "AMMO 762 60", или { gun: ak47 } / { ammo: "762", amount: 60 }.
+# В магазинах и наборах: "GUN ak47" и "AMMO rifle 60", или { gun: ak47 } / { ammo: rifle, amount: 60 }.
 # Разрывные стрелы ("EXPLOSIVE_ARROW 4") — снаряды для M79 (ammo: explosive-arrow). Ракета РПГ-7 — "AMMO rpg 1".
 # Взрывы — settings.explosive-arrows режима (у РПГ свой тип rpg: explosive-arrows.types.rpg).
 #
-# Статы взяты из реальных ТТХ: калибр, ёмкость магазина, темп стрельбы, время перезарядки, прицельная дальность.
+# Статы взяты из реальных ТТХ: ёмкость магазина, темп стрельбы, время перезарядки, прицельная дальность.
+# Патронов для удобства три вида: пистолетные, промежуточные, винтовочные (плюс картечь и ракеты РПГ).
 # Урон считается от энергии пули (у игрока 20 ед. здоровья, броня его снижает): 9 мм ≈ 5, 5.56 ≈ 6, 7.62×39 ≈ 7,
 # 7.62×54R ≈ 11, 7.92×57 ≈ 13, .338 Lapua ≈ 19. Попадание в голову ×4 — без брони смертельно почти из всего.
 # До effective-range урон полный, дальше линейно падает до min-damage (доля) на range.
@@ -37,17 +38,11 @@ settings:
 
 # Патроны: model — номер модели в паке QualityArmory (phantom_membrane.json)
 ammo:
-  "9mm":    { name: "<gray>Патроны 9×19 мм", model: 1 }
-  "762x25": { name: "<gray>Патроны 7.62×25 мм ТТ", model: 1 }
-  "50ae":   { name: "<gray>Патроны .50 AE", model: 7 }
-  "556":    { name: "<gray>Патроны 5.56×45 мм NATO", model: 2 }
-  "762x39": { name: "<gray>Патроны 7.62×39 мм", model: 3 }
-  "9x39":   { name: "<gray>Патроны 9×39 мм СП-5", model: 3 }
-  "762x54": { name: "<gray>Патроны 7.62×54R", model: 3 }
-  "792":    { name: "<gray>Патроны 7.92×57 мм Mauser", model: 3 }
-  "338":    { name: "<gray>Патроны .338 Lapua Magnum", model: 7 }
-  shotgun:  { name: "<gray>Картечь 12 калибра", model: 4 }
-  rpg:      { name: "<red>Выстрел ПГ-7В", model: 5 }
+  pistol:       { name: "<gray>Пистолетные патроны", model: 1 }      # пистолеты и ПП: P30, Deagle, MP5, Uzi, ППШ-41
+  intermediate: { name: "<gray>Промежуточные патроны", model: 2 }    # автоматы: АК-47, M16, M4, FAMAS, АС «Вал»
+  rifle:        { name: "<gray>Винтовочные патроны", model: 3 }      # винтовки и пулемёт: СВД, Kar98k, AWP, ПКП
+  shotgun:      { name: "<gray>Картечь 12 калибра", model: 4 }
+  rpg:          { name: "<red>Выстрел ПГ-7В", model: 5 }
 
 # Оружие. model — номер модели в паке QualityArmory (crossbow.json): 1 p30, 2 pkp, 3 mp5, 4 ak47, 6 m16, 9 rpg,
 # 16 dragunov, 17 spas, 18 aa12, 20 awp, 25 m4a1s, 49 uzi, 54 ppsh41, 55 m79, 58 asval, 60 kar98k, 64 famas, 78 deagle и т.д.
@@ -71,7 +66,7 @@ guns:
   p30:                     # HK P30: 9×19, 15 патронов
     name: "<white>HK P30"
     model: 1
-    ammo: "9mm"
+    ammo: pistol
     magazine: 15
     reload: 1.7
     damage: 5.0
@@ -89,7 +84,7 @@ guns:
   deagle:                  # Desert Eagle Mark XIX: .50 AE, 7 патронов
     name: "<gold>Desert Eagle"
     model: 78
-    ammo: "50ae"
+    ammo: pistol
     magazine: 7
     reload: 2.2
     damage: 9.0
@@ -108,7 +103,7 @@ guns:
   mp5:                     # HK MP5A3: 9×19, 30 патронов, 800 выстр./мин
     name: "<yellow>HK MP5"
     model: 3
-    ammo: "9mm"
+    ammo: pistol
     magazine: 30
     reload: 2.6
     damage: 5.0
@@ -126,7 +121,7 @@ guns:
   uzi:                     # IMI Uzi: 9×19, 32 патрона, 600 выстр./мин
     name: "<yellow>Uzi"
     model: 49
-    ammo: "9mm"
+    ammo: pistol
     magazine: 32
     reload: 2.4
     damage: 5.0
@@ -144,7 +139,7 @@ guns:
   ppsh41:                  # ППШ-41: 7.62×25 ТТ, барабан на 71 патрон, 1000 выстр./мин, переводчик огня
     name: "<gold>ППШ-41"
     model: 54
-    ammo: "762x25"
+    ammo: pistol
     magazine: 71
     reload: 4.0
     damage: 5.0
@@ -163,7 +158,7 @@ guns:
   ak47:                    # АК-47: 7.62×39, 30 патронов, 600 выстр./мин
     name: "<red>АК-47"
     model: 4
-    ammo: "762x39"
+    ammo: intermediate
     magazine: 30
     reload: 2.6
     damage: 7.0
@@ -181,7 +176,7 @@ guns:
   m16:                     # M16A2: 5.56×45, 30 патронов, отсечка по 3 (800 выстр./мин)
     name: "<green>M16A2"
     model: 6
-    ammo: "556"
+    ammo: intermediate
     magazine: 30
     reload: 2.6
     damage: 6.0
@@ -200,7 +195,7 @@ guns:
   m4a1s:                   # M4A1 с глушителем: 5.56×45, 30 патронов, 800 выстр./мин
     name: "<green>M4A1 (глушитель)"
     model: 25
-    ammo: "556"
+    ammo: intermediate
     magazine: 30
     reload: 2.5
     damage: 6.0
@@ -218,7 +213,7 @@ guns:
   famas:                   # FAMAS F1: 5.56×45, 25 патронов, 1000 выстр./мин, отсечка по 3
     name: "<green>FAMAS F1"
     model: 64
-    ammo: "556"
+    ammo: intermediate
     magazine: 25
     reload: 2.8
     damage: 6.0
@@ -237,7 +232,7 @@ guns:
   asval:                   # АС «Вал»: 9×39 СП-5, 20 патронов, 900 выстр./мин, встроенный глушитель
     name: "<dark_green>АС «Вал»"
     model: 58
-    ammo: "9x39"
+    ammo: intermediate
     magazine: 20
     reload: 2.4
     damage: 7.5
@@ -257,7 +252,7 @@ guns:
   pkp:                     # ПКП «Печенег»: 7.62×54R, лента на 100, 650 выстр./мин
     name: "<dark_red>ПКП «Печенег»"
     model: 2
-    ammo: "762x54"
+    ammo: rifle
     magazine: 100
     reload: 7.0
     damage: 11.0
@@ -318,7 +313,7 @@ guns:
   dragunov:                # СВД: 7.62×54R, 10 патронов, полуавтомат, ПСО-1 ×4
     name: "<light_purple>СВД"
     model: 16
-    ammo: "762x54"
+    ammo: rifle
     magazine: 10
     reload: 3.0
     damage: 11.0
@@ -337,7 +332,7 @@ guns:
   kar98k:                  # Mauser Kar98k: 7.92×57, 5 патронов, продольно-скользящий затвор, заряжается по одному
     name: "<gold>Kar98k"
     model: 60
-    ammo: "792"
+    ammo: rifle
     magazine: 5
     reload: 0.6
     reload-mode: single
@@ -357,7 +352,7 @@ guns:
   awp:                     # AI AWM (.338): 5 патронов, затвор
     name: "<light_purple>AWP"
     model: 20
-    ammo: "338"
+    ammo: rifle
     magazine: 5
     reload: 3.7
     damage: 19.0

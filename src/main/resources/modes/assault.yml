@@ -133,17 +133,17 @@ settings:
     - "#minecraft:leaves"
   explosion-proof: [BEDROCK, BARRIER, OBSIDIAN]   # взрывы не берут
   # Бесплатное снаряжение при каждом выходе (если у команды нет набора с team в kits)
-  # Огнестрел и патроны — "GUN p30", "AMMO 9mm 30" (guns.yml); ресурспак с моделями отправляется при входе в режим.
+  # Огнестрел и патроны — "GUN p30", "AMMO pistol 30" (guns.yml); ресурспак с моделями отправляется при входе в режим.
   defender-items:
     - "STONE_SWORD"
     - "GUN p30"
-    - "AMMO 9mm 30"
+    - "AMMO pistol 30"
     - "BOW"
     - "ARROW 16"
   attacker-items:
     - "STONE_SWORD"
     - "GUN p30"
-    - "AMMO 9mm 30"
+    - "AMMO pistol 30"
     - "CROSSBOW"
     - "ARROW 16"
     - "TNT 1"
