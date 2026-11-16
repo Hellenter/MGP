@@ -208,6 +208,9 @@ public final class SiegeLogic extends GameLogic {
         List<ru.mgp.config.Kit> out = new ArrayList<>();
         for (ru.mgp.config.Kit k : session.mode.kits.values())
             if (k.team() != null && k.fits(t.id) && (k.permission() == null || p.hasPermission(k.permission()))) out.add(k);
+        if (out.isEmpty()) // у команды нет своих наборов — общие (без team) доступны обеим сторонам
+            for (ru.mgp.config.Kit k : session.mode.kits.values())
+                if (k.team() == null && (k.permission() == null || p.hasPermission(k.permission()))) out.add(k);
         return out;
     }
 
@@ -306,9 +309,9 @@ public final class SiegeLogic extends GameLogic {
 
     private void equip(Player p) {
         Team t = team(p);
-        // кит команды (kits с team: defenders / attackers) заменяет defender-items / attacker-items
+        // выбранный набор заменяет defender-items / attacker-items (они — только если наборов нет)
         ru.mgp.config.Kit kit = session.equip(p, t == Team.DEFENDERS ? "defenders" : "attackers");
-        if (kit == null || kit.team() == null) for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
+        if (kit == null) for (ItemSpec s : t == Team.DEFENDERS ? defenderItems : attackerItems) {
             ItemStack it = s.build();
             if (s.slot != null) applySlot(p, s.slot, it); else p.getInventory().addItem(it);
         }
