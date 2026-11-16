@@ -1,0 +1,299 @@
+# ===================== ОГНЕСТРЕЛЬНОЕ ОРУЖИЕ =====================
+# Своё оружие MGP. Модели и звуки берутся из ресурспака QualityArmory (сам плагин QualityArmory не нужен).
+#
+# Управление:
+#   ПКМ           — выстрел (держи — очередь, если выбран автоматический режим)
+#   F             — сменить режим огня (одиночный / очередь / отсечка), если у оружия их несколько
+#   Q             — перезарядка
+#   присед (Shift) — прицеливание: меньше разброс и отдача, у снайперских винтовок ещё и приближение
+#
+# Выдать: /mgp gun give <оружие> [игрок], /mgp gun ammo <патроны> [кол-во] [игрок], /mgp gun list
+# В магазинах и наборах: "GUN ak47" и "AMMO 762 60", или { gun: ak47 } / { ammo: "762", amount: 60 }.
+# Разрывные стрелы ("EXPLOSIVE_ARROW 4") — снаряды для M79 (ammo: explosive-arrow). Взрыв — settings.explosive-arrows режима.
+
+# Ресурспак с моделями. Отправляется игроку, когда он заходит в лобби одного из режимов modes, и снимается при выходе.
+resource-pack:
+  enabled: true
+  url: "https://github.com/ZombieStriker/QualityArmory-Resourcepack/releases/download/latest/QualityArmory-21.zip"
+  hash: ""                       # SHA-1 пака; пусто — плагин скачает пак при запуске и посчитает сам
+  required: false                # true — кто отказался от пака, того выкидывает из игры в хаб
+  prompt: "<yellow>Модели оружия для режима. <gray>Без пака оружие будет выглядеть как арбалет."
+  modes: [assault]
+
+# Общие настройки
+settings:
+  base-item: STICK               # предмет-основа оружия (модель подменяется паком)
+  trigger-hold: 5                # тиков после последнего ПКМ, пока очередь продолжается (клиент шлёт ПКМ раз в 4 тика)
+  only-in-games: true            # стрелять можно только в идущей игре (и админам в креативе где угодно)
+  tracer: true                   # след пули частицами
+  break-glass: false             # пули бьют стекло и панели
+  hud: true                      # патроны и режим над хотбаром
+
+# Патроны: model — номер модели в паке QualityArmory (phantom_membrane.json)
+ammo:
+  "9mm":   { name: "<gray>Патроны 9 мм", model: 1 }
+  "556":   { name: "<gray>Патроны 5.56", model: 2 }
+  "762":   { name: "<gray>Патроны 7.62", model: 3 }
+  shotgun: { name: "<gray>Дробь 12 калибра", model: 4 }
+  "50cal": { name: "<gray>Патроны .50", model: 7 }
+
+# Оружие. model — номер модели в паке QualityArmory (crossbow.json): 1 p30, 2 pkp, 3 mp5, 4 ak47, 6 m16, 7 remmington,
+# 16 dragunov, 17 spas, 18 aa12, 20 awp, 25 m4a1s, 49 uzi, 55 m79, 59 fnp90, 64 famas, 78 deagle и т.д. (всего 85)
+#
+#   ammo        — тип патронов из ammo; none — бесконечный запас (только перезарядка магазина);
+#                 explosive-arrow — разрывные стрелы (стреляет самой стрелой, взрыв по её типу)
+#   magazine    — патронов в магазине          reload  — время перезарядки, сек.
+#   reload-mode — magazine (весь магазин) или single (по одному патрону, как дробовик; можно прервать выстрелом)
+#   damage      — урон за пулю (у игрока 20 ед. здоровья)   headshot — множитель в голову
+#   fire-rate   — выстрелов в минуту             modes — auto | semi | burst (первый — режим по умолчанию)
+#   burst       — пуль в отсечке                 pellets — дробин за выстрел
+#   spread      — разброс от бедра, градусы      aim-spread — разброс в приседе
+#   recoil      — подброс прицела, градусы       range — дальность, блоков
+#   knockback   — отбрасывание от пули (0 — нет, 1 — как от удара)
+#   zoom        — приближение в приседе (0 — нет, 1-4 — сила)
+#   speed       — скорость снаряда (для explosive-arrow)
+#   sound / reload-sound — звук из пака (bulletak47, bulletsmall, reloadmagin ...) или ванильный (minecraft:...)
+guns:
+  p30:
+    name: "<white>P30"
+    model: 1
+    ammo: "9mm"
+    magazine: 15
+    reload: 1.4
+    damage: 4.0
+    headshot: 1.5
+    fire-rate: 360
+    modes: [semi]
+    spread: 2.0
+    aim-spread: 0.8
+    recoil: 1.5
+    range: 50
+    knockback: 0.1
+    sound: bulletsmall
+    reload-sound: reloadslide
+  deagle:
+    name: "<gold>Desert Eagle"
+    model: 78
+    ammo: "50cal"
+    magazine: 7
+    reload: 1.8
+    damage: 8.0
+    headshot: 1.6
+    fire-rate: 150
+    modes: [semi]
+    spread: 2.5
+    aim-spread: 0.6
+    recoil: 4.0
+    range: 60
+    knockback: 0.3
+    sound: bulletdeagle
+    reload-sound: reloadslide
+  mp5:
+    name: "<yellow>MP5"
+    model: 3
+    ammo: "9mm"
+    magazine: 30
+    reload: 2.0
+    damage: 3.0
+    headshot: 1.5
+    fire-rate: 800
+    modes: [auto, semi]
+    spread: 3.5
+    aim-spread: 1.5
+    recoil: 0.6
+    range: 45
+    knockback: 0.05
+    sound: bulletsmallauto
+    reload-sound: reloadmagin
+  uzi:
+    name: "<yellow>Uzi"
+    model: 49
+    ammo: "9mm"
+    magazine: 32
+    reload: 1.8
+    damage: 2.5
+    headshot: 1.4
+    fire-rate: 950
+    modes: [auto]
+    spread: 5.0
+    aim-spread: 2.5
+    recoil: 0.7
+    range: 35
+    knockback: 0.05
+    sound: bulletsmallauto
+    reload-sound: reloadmagin
+  ak47:
+    name: "<red>AK-47"
+    model: 4
+    ammo: "762"
+    magazine: 30
+    reload: 2.5
+    damage: 4.5
+    headshot: 1.6
+    fire-rate: 600
+    modes: [auto, semi]
+    spread: 3.0
+    aim-spread: 0.9
+    recoil: 1.3
+    range: 80
+    knockback: 0.05
+    sound: bulletak47
+    reload-sound: reloadak47
+  m16:
+    name: "<green>M16"
+    model: 6
+    ammo: "556"
+    magazine: 30
+    reload: 2.3
+    damage: 4.0
+    headshot: 1.6
+    fire-rate: 700
+    burst: 3
+    modes: [burst, semi]
+    spread: 2.2
+    aim-spread: 0.5
+    recoil: 0.9
+    range: 90
+    knockback: 0.05
+    sound: bulletmedium
+    reload-sound: reloadm16
+  m4a1s:
+    name: "<green>M4A1-S"
+    model: 25
+    ammo: "556"
+    magazine: 25
+    reload: 2.2
+    damage: 3.8
+    headshot: 1.6
+    fire-rate: 680
+    modes: [auto, semi]
+    spread: 2.4
+    aim-spread: 0.6
+    recoil: 0.9
+    range: 85
+    knockback: 0.05
+    sound: bulletsilence
+    reload-sound: reloadm16
+  famas:
+    name: "<green>FAMAS"
+    model: 64
+    ammo: "556"
+    magazine: 25
+    reload: 2.3
+    damage: 3.6
+    headshot: 1.5
+    fire-rate: 900
+    burst: 3
+    modes: [burst, auto]
+    spread: 2.6
+    aim-spread: 0.8
+    recoil: 0.8
+    range: 80
+    knockback: 0.05
+    sound: bulletmedium
+    reload-sound: reloadmagin
+  pkp:
+    name: "<dark_red>ПКП «Печенег»"
+    model: 2
+    ammo: "762"
+    magazine: 100
+    reload: 5.0
+    damage: 4.0
+    headshot: 1.5
+    fire-rate: 650
+    modes: [auto]
+    spread: 4.5
+    aim-spread: 1.5
+    recoil: 1.0
+    range: 90
+    knockback: 0.05
+    sound: bulletbig
+    reload-sound: reloadmagin
+  spas:
+    name: "<aqua>SPAS-12"
+    model: 17
+    ammo: shotgun
+    magazine: 8
+    reload: 0.5
+    reload-mode: single
+    damage: 2.5
+    pellets: 8
+    headshot: 1.2
+    fire-rate: 70
+    modes: [semi]
+    spread: 7.0
+    aim-spread: 5.0
+    recoil: 4.5
+    range: 25
+    knockback: 0.08
+    sound: bulletshotgun
+    reload-sound: reloadshell
+  aa12:
+    name: "<aqua>AA-12"
+    model: 18
+    ammo: shotgun
+    magazine: 20
+    reload: 3.0
+    damage: 2.0
+    pellets: 6
+    headshot: 1.2
+    fire-rate: 300
+    modes: [auto, semi]
+    spread: 8.0
+    aim-spread: 6.0
+    recoil: 2.0
+    range: 20
+    knockback: 0.05
+    sound: bulletshotgun
+    reload-sound: reloadmagin
+  dragunov:
+    name: "<light_purple>СВД"
+    model: 16
+    ammo: "762"
+    magazine: 10
+    reload: 3.0
+    damage: 11.0
+    headshot: 1.8
+    fire-rate: 120
+    modes: [semi]
+    spread: 4.0
+    aim-spread: 0.15
+    recoil: 3.0
+    range: 150
+    knockback: 0.2
+    zoom: 2
+    sound: bulletbig
+    reload-sound: reloadmagin
+  awp:
+    name: "<light_purple>AWP"
+    model: 20
+    ammo: "50cal"
+    magazine: 5
+    reload: 3.5
+    damage: 18.0
+    headshot: 2.0
+    fire-rate: 40
+    modes: [semi]
+    spread: 8.0
+    aim-spread: 0.0
+    recoil: 5.0
+    range: 200
+    knockback: 0.4
+    zoom: 4
+    sound: bulletmauser
+    reload-sound: reloadbolt
+  m79:
+    name: "<dark_red>Гранатомёт M79"
+    model: 55
+    ammo: explosive-arrow
+    magazine: 1
+    reload: 2.0
+    fire-rate: 60
+    modes: [semi]
+    projectile: explosive-arrow
+    speed: 2.2
+    spread: 1.5
+    aim-spread: 0.5
+    recoil: 6.0
+    sound: thumper
+    reload-sound: reloadshell
