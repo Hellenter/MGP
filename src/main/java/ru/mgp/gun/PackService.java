@@ -44,6 +44,8 @@ public final class PackService implements Listener {
     /** У кого загружен пак оружия. */
     private final Set<UUID> loaded = new HashSet<>();
     private int hashJob;
+    /** Кому паки включены вручную (/mgp pack load) — держатся и вне режимов, до /mgp pack unload или выхода. */
+    private final Set<UUID> manual = new HashSet<>();
     /** Есть ли пак оружия (url); без него в packs только дополнительные. */
     private boolean gunPack;
 
@@ -124,7 +126,28 @@ public final class PackService implements Listener {
 
     public boolean loaded(Player p) { return loaded.contains(p.getUniqueId()); }
 
+    /** Включить паки игроку вручную (для проверки моделей вне режима). false — паков нет в guns.yml. */
+    public boolean loadManual(Player p) {
+        if (packs.isEmpty()) return false;
+        manual.add(p.getUniqueId());
+        if (sent.remove(p.getUniqueId())) { loaded.remove(p.getUniqueId()); for (Pack k : packs) p.removeResourcePacks(k.id); }
+        sync();
+        return true;
+    }
+
+    /** Снять ручные паки. false — игрок в режиме, где паки нужны: они снимутся, когда он выйдет в хаб. */
+    public boolean unloadManual(Player p) {
+        manual.remove(p.getUniqueId());
+        sync();
+        return !sent.contains(p.getUniqueId());
+    }
+
+    public boolean manual(Player p) { return manual.contains(p.getUniqueId()); }
+
+    public int packCount() { return packs.size(); }
+
     private boolean wants(Player p) {
+        if (manual.contains(p.getUniqueId())) return !packs.isEmpty();
         if (!enabled) return false;
         GameSession s = plugin.sessions().of(p);
         return s != null && (modes.contains(s.mode.id.toLowerCase(Locale.ROOT)) || modes.contains(s.mode.type.toLowerCase(Locale.ROOT)));
@@ -172,6 +195,7 @@ public final class PackService implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
+        manual.remove(e.getPlayer().getUniqueId());
         sent.remove(e.getPlayer().getUniqueId());
         loaded.remove(e.getPlayer().getUniqueId());
     }

@@ -68,6 +68,8 @@ public final class GunService implements Listener {
     private final PackService pack;
     private Material base = Material.STICK;
     private int triggerHold = 5;
+    /** С какого расстояния от стрелка начинается след пули (чтобы не закрывал прицел). */
+    private double tracerStart = 10;
     private boolean onlyInGames = true, tracer = true, breakGlass = false, hud = true;
     private long now;
     /** Попадание, которое сейчас наносит урон (для отбрасывания). */
@@ -127,6 +129,7 @@ public final class GunService implements Listener {
             triggerHold = Math.max(4, s.getInt("trigger-hold", 5));
             onlyInGames = s.getBoolean("only-in-games", true);
             tracer = s.getBoolean("tracer", true);
+            tracerStart = Math.max(1.2, s.getDouble("tracer-start", 10));
             breakGlass = s.getBoolean("break-glass", false);
             hud = s.getBoolean("hud", true);
         }
@@ -626,7 +629,7 @@ public final class GunService implements Listener {
         Vector end = hit != null ? hit.getHitPosition() : eye.toVector().add(dir.clone().multiply(g.range()));
         if (tracer) {
             double len = end.distance(eye.toVector());
-            for (double d = 1.2; d < len; d += 1.4)
+            for (double d = tracerStart; d < len; d += 1.4)
                 w.spawnParticle(Particle.CRIT, eye.toVector().add(dir.clone().multiply(d)).toLocation(w), 1, 0, 0, 0, 0);
         }
         if (hit == null) return;
