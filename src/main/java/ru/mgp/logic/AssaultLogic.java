@@ -792,10 +792,13 @@ public final class AssaultLogic extends GameLogic {
         if (!any) return null; // у команды нет зон стадий — только play-зона и стартовая зона (teamzone)
         List<Region> out = new ArrayList<>();
         for (int i = cur; i >= 0; i--) {
-            List<Region> z = stages.get(i).zones().get(t.id);
-            // у стадии 1 своей зоны нет — её зона это стартовая зона команды (/mgp setup teamzone)
-            if (z == null && i == 0) z = session.map().teamZones.get(t.id);
-            if (z == null) continue;
+            List<Region> z = new ArrayList<>();
+            List<Region> own = stages.get(i).zones().get(t.id);
+            if (own != null) z.addAll(own);
+            // стартовая зона команды (/mgp setup teamzone, например база атаки) всегда входит в стадию 1
+            List<Region> base = i == 0 ? session.map().teamZones.get(t.id) : null;
+            if (base != null) z.addAll(base);
+            if (z.isEmpty()) continue;
             out.addAll(z);
             if (!cumulative) break;
         }
