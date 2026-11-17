@@ -27,7 +27,9 @@ import java.util.*;
 /**
  * Осада (Siege): защитники держат крепость и чинят её, атакующие (больше ресурсов, способности) должны убить
  * всех защитников. Крепость — области fortress в файле карты.
- *   • Руками ломаются только блоки из breakable-blocks (земля, доски...) и блоки, поставленные за игру.
+ *   • Ломать можно всё, как в выживании. Только крепость атакующие руками не ломают — ей нужен ТНТ.
+ *     Защитники ломают и крепость. Прочные блоки (fortress-blocks), поставленные защитниками,
+ *     становятся частью крепости: атакующим — только ТНТ, молот их чинит.
  *   • ТНТ поджигается сразу при установке и ломает всё, кроме explosion-proof. Своих ТНТ не ранит.
  *   • Молот защитников (ПКМ по стене) возвращает исходные блоки крепости рядом.
  *   • Защитник умирает один раз, атакующий возрождается через attacker-respawn сек.
@@ -63,7 +65,7 @@ public final class SiegeLogic extends GameLogic {
 
     // настройки
     private final double defenderRatio;
-    private final Set<Material> breakable, explosionProof;
+    private final Set<Material> explosionProof, fortressBlocks;
     private final boolean autoTnt;
     private final int tntFuse;
     private final int attackerRespawn;
@@ -107,7 +109,9 @@ public final class SiegeLogic extends GameLogic {
         hideEnemyNames = st.getBoolean("hide-enemy-nametags", true);
         enemyNameOnAim = st.getBoolean("enemy-nametag-on-aim", true);
         List<String> unknown = new ArrayList<>();
-        breakable = Cfg.materials(st.getStringList("breakable-blocks"), unknown);
+        fortressBlocks = Cfg.materials(st.isList("fortress-blocks") ? st.getStringList("fortress-blocks")
+                : List.of("COBBLESTONE", "MOSSY_COBBLESTONE", "STONE", "SMOOTH_STONE", "STONE_BRICKS", "MOSSY_STONE_BRICKS",
+                "CRACKED_STONE_BRICKS", "BRICKS", "COBBLED_DEEPSLATE", "DEEPSLATE_BRICKS"), unknown);
         explosionProof = Cfg.materials(st.isList("explosion-proof") ? st.getStringList("explosion-proof") : List.of("BEDROCK", "BARRIER"), unknown);
         if (!unknown.isEmpty()) s.plugin().getLogger().warning("Осада " + s.mode.id + ": не распознаны блоки " + unknown);
         autoTnt = st.getBoolean("tnt-auto-ignite", true);
@@ -394,10 +398,11 @@ public final class SiegeLogic extends GameLogic {
     public void onBlockBreak(BlockBreakEvent e) {
         Block b = e.getBlock();
         long k = key(b.getX(), b.getY(), b.getZ());
-        if (placed.remove(k)) return;                       // поставлен за игру — можно
-        if (breakable.contains(b.getType())) return;         // земля, доски...
+        if (placed.remove(k)) return;                        // поставлен за игру (не крепость) — можно всем
+        if (!original.containsKey(k)) return;                 // не крепость — ломается как в выживании
+        if (is(e.getPlayer(), Team.DEFENDERS)) { original.remove(k); return; } // защитники перестраивают свою крепость
         e.setCancelled(true);
-        e.getPlayer().sendActionBar(Msg.parse(inFortress(b) ? "<red>Стену крепости руками не сломать — нужен ТНТ" : "<red>Этот блок не ломается"));
+        e.getPlayer().sendActionBar(Msg.parse("<red>Крепость руками не сломать — нужен ТНТ"));
     }
 
     @Override
@@ -419,7 +424,13 @@ public final class SiegeLogic extends GameLogic {
             b.getWorld().playSound(at, Sound.ENTITY_TNT_PRIMED, 1f, 1f);
             return;
         }
-        placed.add(key(b.getX(), b.getY(), b.getZ()));
+        long k = key(b.getX(), b.getY(), b.getZ());
+        if (is(p, Team.DEFENDERS) && fortressBlocks.contains(b.getType())) {
+            original.put(k, b.getBlockData()); // прочный блок защитника — теперь часть крепости
+            placed.remove(k);
+            return;
+        }
+        placed.add(k);
     }
 
     @Override
