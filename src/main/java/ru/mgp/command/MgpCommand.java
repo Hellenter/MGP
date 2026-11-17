@@ -1038,6 +1038,7 @@ public final class MgpCommand implements TabExecutor {
             "<yellow>/mgp setup assault <карта> stage <n> objective <id></yellow> — цель в стадию (<yellow>-id</yellow> — убрать)",
             "<yellow>/mgp setup assault <карта> stage <n> spawn <attackers|defenders></yellow> — спавн стадии там, где стоишь",
             "<yellow>/mgp setup assault <карта> stage <n> require <all|число></yellow> — сколько целей разрушить",
+            "<yellow>/mgp setup assault <карта> stage <n> zone <attackers|defenders> [clear]</yellow> — зона команды в эту стадию из выделения",
             "<yellow>/mgp setup assault <карта> stage <n> action <действие></yellow> — при начале стадии (clearactions, remove)",
             "<yellow>/mgp setup assault <карта> limbo <attackers|defenders></yellow> — лимбо команды там, где стоишь",
             "<yellow>/mgp setup assault <карта> exit [имя]</yellow> — выход из лимбо из выделения pos1/pos2 (триггер mode: deploy)",
@@ -1122,6 +1123,33 @@ public final class MgpCommand implements TabExecutor {
                     addMap(y, "spawn-points", sp);
                 }, "Спавн стадии " + n + " для " + team + " добавлен");
             }
+            case "zone" -> {
+                // stage <n> zone <attackers|defenders> [clear] — где команда может быть в эту стадию (из выделения pos1/pos2)
+                need(a, 6);
+                String team = assaultTeam(a[5]);
+                if (a.length > 6 && a[6].equalsIgnoreCase("clear")) {
+                    edit(p, a, 6, y -> editStage(y, n, false, m -> {
+                        Map<String, Object> z = new LinkedHashMap<>(Cfg.asMap(m.get("zones")) == null ? Map.of() : Cfg.asMap(m.get("zones")));
+                        z.remove(team);
+                        m.put("zones", z);
+                    }), "Зона " + team + " стадии " + n + " убрана");
+                    return;
+                }
+                Pos[] sel = selection(p);
+                if (sel == null) return;
+                edit(p, a, 6, y -> editStage(y, n, false, m -> {
+                    Map<String, Object> z = new LinkedHashMap<>(Cfg.asMap(m.get("zones")) == null ? Map.of() : Cfg.asMap(m.get("zones")));
+                    List<Object> l = z.get(team) instanceof List<?> old2 ? new ArrayList<>(old2) : new ArrayList<>();
+                    Map<String, Object> r = new LinkedHashMap<>();
+                    r.put("min", sel[0].serialize());
+                    r.put("max", sel[1].serialize());
+                    l.add(r);
+                    z.put(team, l);
+                    m.put("zones", z);
+                }), "Зона " + team + " для стадии " + n + " добавлена (областей можно несколько)");
+                Msg.send(p, "<gray>Зоны стадий складываются: в стадии " + n + " команда ходит по зонам стадий 1.." + n
+                        + ". Только последняя — <yellow>stage-zones: replace</yellow> в режиме. Убрать: <yellow>stage " + n + " zone " + team + " clear");
+            }
             case "require" -> {
                 need(a, 6);
                 String v = a[5].equalsIgnoreCase("all") ? "all" : String.valueOf(Math.max(1, Integer.parseInt(a[5])));
@@ -1180,6 +1208,14 @@ public final class MgpCommand implements TabExecutor {
         y.set("stages", l);
     }
 
+    private static String zoneInfo(Object raw) {
+        Map<String, Object> z = Cfg.asMap(raw);
+        if (z == null || z.isEmpty()) return "";
+        List<String> parts = new ArrayList<>();
+        for (var e : z.entrySet()) if (e.getValue() instanceof List<?> l && !l.isEmpty()) parts.add(e.getKey() + " " + l.size());
+        return parts.isEmpty() ? "" : "<gray>, зоны: <white>" + String.join(", ", parts);
+    }
+
     private void assaultInfo(Player p, String[] a) {
         MapConfig m = plugin.registry().map(a[1]);
         if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
@@ -1211,7 +1247,8 @@ public final class MgpCommand implements TabExecutor {
                 objs.add(m.objectives.stream().anyMatch(o -> o.id().equals(id)) ? "<white>" + Msg.esc(id) : "<red>" + Msg.esc(id) + "?");
             p.sendMessage(Msg.parse("<gold>" + (i + 1) + ".</gold> " + Cfg.str(s, "name", "Стадия " + (i + 1)) + " <gray>— " + Cfg.str(s, "time", "по умолчанию")
                     + ", цели: " + (objs.isEmpty() ? "<red>нет" : String.join("<gray>, ", objs)) + " <gray>(нужно " + Cfg.str(s, "require", "all") + ")"
-                    + ", спавны: " + (att == 0 ? "<red>" : "<white>") + att + " атаки<gray>, " + (def == 0 ? "<red>" : "<white>") + def + " защиты"));
+                    + ", спавны: " + (att == 0 ? "<red>" : "<white>") + att + " атаки<gray>, " + (def == 0 ? "<red>" : "<white>") + def + " защиты"
+                    + zoneInfo(s.get("zones"))));
         }
     }
 
@@ -1557,8 +1594,9 @@ public final class MgpCommand implements TabExecutor {
                 if (a.length == 4) out.addAll(List.of("stage", "limbo", "exit", "info"));
                 else if (a.length == 5 && a[3].equalsIgnoreCase("limbo")) out.addAll(List.of("attackers", "defenders"));
                 else if (a.length == 5 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("1", "2", "3"));
-                else if (a.length == 6 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("15:00", "objective", "spawn", "require", "action", "clearactions", "remove"));
-                else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("spawn")) out.addAll(List.of("attackers", "defenders"));
+                else if (a.length == 6 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("15:00", "objective", "spawn", "zone", "require", "action", "clearactions", "remove"));
+                else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && (a[5].equalsIgnoreCase("spawn") || a[5].equalsIgnoreCase("zone"))) out.addAll(List.of("attackers", "defenders"));
+                else if (a.length == 8 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("zone")) out.add("clear");
                 else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("require")) out.addAll(List.of("all", "1", "2"));
                 else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("objective")) {
                     MapConfig mc = plugin.registry().map(a[2]);

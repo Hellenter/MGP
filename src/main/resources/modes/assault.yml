@@ -222,6 +222,7 @@ settings:
   spawn-protection: 3            # сек. неуязвимости после выхода из лимбо (снимается, если сам атакуешь)
   keep-inventory: false          # false — после смерти покупки теряются, бесплатный набор выдаётся заново
   drop-items: false              # выпадают ли вещи убитого (false — нет: нельзя «фармить» чужие покупки)
+  stage-zones: cumulative        # зоны стадий (stage <n> zone): cumulative — в стадии N открыты зоны 1..N; replace — только последняя заданная
   redeploy-on-stage: none        # при смене стадии перенести на новые спавны: none | defenders | attackers | all
   hide-enemy-nametags: true      # ники: атака красная, защита синяя; свои видны всегда
   enemy-nametag-on-aim: true     # ник противника виден, только пока смотришь прямо на него (сквозь стены — нет)

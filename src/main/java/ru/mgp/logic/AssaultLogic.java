@@ -52,7 +52,27 @@ public final class AssaultLogic extends GameLogic {
     }
 
     /** Стадия: цели (id из objectives), сколько из них нужно (0 — все), время и действия при начале. */
-    private record Stage(String name, int time, List<String> objectives, int require, String spawnGroup, List<String> actions) {}
+    /** zones — где может быть команда в эту стадию (attackers / defenders → области), пусто — без ограничения стадии. */
+    private record Stage(String name, int time, List<String> objectives, int require, String spawnGroup, List<String> actions,
+                         Map<String, List<Region>> zones) {}
+
+    private static Map<String, List<Region>> zones(Object raw) {
+        Map<String, List<Region>> out = new HashMap<>();
+        Map<String, Object> m = Cfg.asMap(raw);
+        if (m == null) return out;
+        for (Map.Entry<String, Object> e : m.entrySet()) {
+            if (!(e.getValue() instanceof List<?> l)) continue;
+            List<Region> rs = new ArrayList<>();
+            for (Object o : l) {
+                Map<String, Object> rm = Cfg.asMap(o);
+                if (rm == null) continue;
+                Pos a = Pos.parse(Cfg.str(rm, "min", null)), b = Pos.parse(Cfg.str(rm, "max", null));
+                if (a != null && b != null) rs.add(Region.of(a, b));
+            }
+            if (!rs.isEmpty()) out.put(e.getKey().toLowerCase(Locale.ROOT), rs);
+        }
+        return out;
+    }
 
     private static final String SHOP_ITEM = "assault_shop";
     private static final String DEPLOY_ITEM = "assault_deploy";
@@ -163,12 +183,12 @@ public final class AssaultLogic extends GameLogic {
             int require = req.equalsIgnoreCase("all") ? 0 : Math.max(0, parseInt(req));
             stages.add(new Stage(Cfg.str(sm, "name", "<yellow>Стадия " + n), time > 0 ? time : stageTimeDefault,
                     Cfg.strings(sm.get("objectives")), require, Cfg.str(sm, "spawn-group", "stage" + n).toLowerCase(Locale.ROOT),
-                    Cfg.strings(sm.get("actions"))));
+                    Cfg.strings(sm.get("actions")), zones(sm.get("zones"))));
         }
         if (stages.isEmpty()) { // без стадий — одна стадия со всеми целями карты
             List<String> ids = new ArrayList<>();
             for (MapConfig.Objective o : m.objectives) ids.add(o.id());
-            stages.add(new Stage("<yellow>Штурм", stageTimeDefault, ids, 0, "stage1", List.of()));
+            stages.add(new Stage("<yellow>Штурм", stageTimeDefault, ids, 0, "stage1", List.of(), Map.of()));
         }
         for (int i = 0; i < stages.size(); i++)
             if (stages.get(i).objectives().isEmpty())
@@ -750,6 +770,32 @@ public final class AssaultLogic extends GameLogic {
 
     @Override
     public void onTimeUp() {} // время считают стадии (stage-time / time в стадиях карты)
+
+    @Override
+    public boolean customZones() {
+        for (Stage st : stages) if (!st.zones().isEmpty()) return true;
+        return false;
+    }
+
+    /**
+     * Зона команды на текущей стадии (в подготовку — как в стадии 1). stage-zones: cumulative — открытые зоны
+     * всех стадий до текущей вместе (атака продвигается дальше, тыл остаётся); replace — только зона последней стадии, где она задана.
+     */
+    @Override
+    public List<Region> stageZone(Player p) {
+        Team t = team(p);
+        if (t == null || ended || stages.isEmpty()) return null;
+        int cur = Math.max(0, Math.min(stageIdx, stages.size() - 1));
+        boolean cumulative = !"replace".equalsIgnoreCase(session.mode.settings.getString("stage-zones", "cumulative"));
+        List<Region> out = new ArrayList<>();
+        for (int i = cur; i >= 0; i--) {
+            List<Region> z = stages.get(i).zones().get(t.id);
+            if (z == null) continue;
+            out.addAll(z);
+            if (!cumulative) break;
+        }
+        return out.isEmpty() ? null : out;
+    }
 
     @Override
     public boolean zoneFree(Player p) { return inLimbo.containsKey(p.getUniqueId()); }
