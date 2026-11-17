@@ -40,7 +40,7 @@ import java.util.*;
  */
 public final class AssaultLogic extends GameLogic {
     public enum Team {
-        DEFENDERS("defenders", "<aqua>", "Защитники", net.kyori.adventure.text.format.NamedTextColor.AQUA, 0x3c8dde),
+        DEFENDERS("defenders", "<blue>", "Защитники", net.kyori.adventure.text.format.NamedTextColor.BLUE, 0x3c8dde),
         ATTACKERS("attackers", "<red>", "Атакующие", net.kyori.adventure.text.format.NamedTextColor.RED, 0xd23c3c);
         final String id, color, title;
         final net.kyori.adventure.text.format.NamedTextColor named;
@@ -60,7 +60,7 @@ public final class AssaultLogic extends GameLogic {
     // настройки
     private final double defenderRatio;
     private final int prepTime, stageTimeDefault, respawnDelay, limboTimeout, spawnProtection;
-    private final boolean keepInventory, dropItems, hideEnemyNames, autoTnt, defenderTnt, objectiveHandBreak, defendersRepair;
+    private final boolean keepInventory, dropItems, hideEnemyNames, enemyNameOnAim, autoTnt, defenderTnt, objectiveHandBreak, defendersRepair;
     private final String redeploy;
     private final int tntFuse;
     private final Set<Material> breakable, explosionProof;
@@ -100,6 +100,7 @@ public final class AssaultLogic extends GameLogic {
         keepInventory = st.getBoolean("keep-inventory", false);
         dropItems = st.getBoolean("drop-items", false);
         hideEnemyNames = st.getBoolean("hide-enemy-nametags", true);
+        enemyNameOnAim = st.getBoolean("enemy-nametag-on-aim", true);
         autoTnt = st.getBoolean("tnt-auto-ignite", true);
         tntFuse = Math.max(1, (int) Math.round(st.getDouble("tnt-fuse", 3) * 20));
         defenderTnt = st.getBoolean("defender-tnt", false);
@@ -670,7 +671,7 @@ public final class AssaultLogic extends GameLogic {
                 return;
             }
             if (members(Team.DEFENDERS).isEmpty()) win(Team.ATTACKERS, "<red>Защитников не осталось!");
-            else if (members(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<aqua>Атакующих не осталось!");
+            else if (members(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<blue>Атакующих не осталось!");
         });
     }
 
@@ -700,7 +701,7 @@ public final class AssaultLogic extends GameLogic {
             }
             case "next-stage" -> { if (stage() != null) stageTaken(); return true; }
             case "attackers-win" -> { win(Team.ATTACKERS, "<red>Атакующие победили!"); return true; }
-            case "defenders-win" -> { win(Team.DEFENDERS, "<aqua>Защитники победили!"); return true; }
+            case "defenders-win" -> { win(Team.DEFENDERS, "<blue>Защитники победили!"); return true; }
             default -> { return false; }
         }
     }
@@ -730,7 +731,7 @@ public final class AssaultLogic extends GameLogic {
         Stage st = stage();
         int left = st == null ? prepTime - now : stageStartAt + st.time() - now;
         if (st != null && left <= 0) {
-            win(Team.DEFENDERS, "<aqua>Время стадии вышло — защита выстояла!");
+            win(Team.DEFENDERS, "<blue>Время стадии вышло — защита выстояла!");
             return;
         }
         String title = st == null ? "<yellow>Подготовка <white>" + Msg.time(Math.max(0, left))
@@ -763,8 +764,13 @@ public final class AssaultLogic extends GameLogic {
     public boolean nametagVisible(Player viewer, Player target) {
         if (!hideEnemyNames) return true;
         Team a = team(viewer), b = team(target);
-        return a == null || b == null || a == b;
+        if (a == null || b == null || a == b) return true; // свои — всегда
+        // противник — только пока смотришь прямо на него и между вами нет стены
+        return enemyNameOnAim && session.plugin().sidebars().aimingAt(viewer, target);
     }
+
+    @Override
+    public boolean aimNametags() { return hideEnemyNames && enemyNameOnAim; }
 
     @Override
     public void placeholders(Player p, Map<String, String> ph) {
