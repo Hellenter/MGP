@@ -88,6 +88,9 @@ public abstract class GameLogic {
     /** Видит ли viewer ник target над головой (осада: ники противников скрыты). */
     public boolean nametagVisible(Player viewer, Player target) { return true; }
 
+    /** Считать, на кого смотрит каждый игрок (ник противника виден только по наведению — см. nametagVisible). */
+    public boolean aimNametags() { return false; }
+
     /** Через сколько секунд после старта снять зоны команд (-1 — как в карте/режиме, team-zones-open). */
     public int teamZonesOpenAt() { return -1; }
 

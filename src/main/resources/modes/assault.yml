@@ -191,7 +191,7 @@ sidebar:
     - "<gray>{phase}: <yellow>{time}"
     - "<gray>Цели: <white>{objectives_progress}"
     - ""
-    - "<red>Атака: <white>{attackers} <dark_gray>| <aqua>Защита: <white>{defenders}"
+    - "<red>Атака: <white>{attackers} <dark_gray>| <blue>Защита: <white>{defenders}"
     - "<gray>Карта: {map}"
     - "<dark_gray>────────────"
   ending:
@@ -223,7 +223,9 @@ settings:
   keep-inventory: false          # false — после смерти покупки теряются, бесплатный набор выдаётся заново
   drop-items: false              # выпадают ли вещи убитого (false — нет: нельзя «фармить» чужие покупки)
   redeploy-on-stage: none        # при смене стадии перенести на новые спавны: none | defenders | attackers | all
-  hide-enemy-nametags: true      # ники противников не видны, союзников — видны
+  hide-enemy-nametags: true      # ники: атака красная, защита синяя; свои видны всегда
+  enemy-nametag-on-aim: true     # ник противника виден, только пока смотришь прямо на него (сквозь стены — нет)
+  nametag-aim-distance: 64       # дальность наведения, блоков
   tnt-auto-ignite: true          # ТНТ поджигается сразу при установке
   tnt-fuse: 3                    # сек. до взрыва
   defender-tnt: false            # могут ли защитники ставить ТНТ

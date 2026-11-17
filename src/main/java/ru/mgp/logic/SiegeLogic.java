@@ -39,7 +39,7 @@ import java.util.*;
  */
 public final class SiegeLogic extends GameLogic {
     public enum Team {
-        DEFENDERS("defenders", "<aqua>", "Защитники", NamedTextColorHolder.AQUA),
+        DEFENDERS("defenders", "<blue>", "Защитники", NamedTextColorHolder.BLUE),
         ATTACKERS("attackers", "<red>", "Атакующие", NamedTextColorHolder.RED);
         final String id, color, title;
         final net.kyori.adventure.text.format.NamedTextColor named;
@@ -50,7 +50,7 @@ public final class SiegeLogic extends GameLogic {
 
     /** Цвета ников (enum не может ссылаться на статические поля другого класса в своём конструкторе напрямую — так проще). */
     private static final class NamedTextColorHolder {
-        static final net.kyori.adventure.text.format.NamedTextColor AQUA = net.kyori.adventure.text.format.NamedTextColor.AQUA;
+        static final net.kyori.adventure.text.format.NamedTextColor BLUE = net.kyori.adventure.text.format.NamedTextColor.BLUE;
         static final net.kyori.adventure.text.format.NamedTextColor RED = net.kyori.adventure.text.format.NamedTextColor.RED;
     }
 
@@ -74,7 +74,7 @@ public final class SiegeLogic extends GameLogic {
     private final List<ItemSpec> defenderItems = new ArrayList<>(), attackerItems = new ArrayList<>();
     private final List<Ability> abilities = new ArrayList<>();
     private final int prepTime, fightTime, glowTime, kitLimit, kitSelectTime;
-    private final boolean hideEnemyNames;
+    private final boolean hideEnemyNames, enemyNameOnAim;
 
     // состояние
     private final Map<UUID, Team> teams = new HashMap<>();
@@ -105,6 +105,7 @@ public final class SiegeLogic extends GameLogic {
         kitLimit = Math.max(0, st.getInt("max-same-kit", 2));
         kitSelectTime = Math.max(5, Cfg.seconds(st.get("kit-select-time"), 60));
         hideEnemyNames = st.getBoolean("hide-enemy-nametags", true);
+        enemyNameOnAim = st.getBoolean("enemy-nametag-on-aim", true);
         List<String> unknown = new ArrayList<>();
         breakable = Cfg.materials(st.getStringList("breakable-blocks"), unknown);
         explosionProof = Cfg.materials(st.isList("explosion-proof") ? st.getStringList("explosion-proof") : List.of("BEDROCK", "BARRIER"), unknown);
@@ -520,7 +521,7 @@ public final class SiegeLogic extends GameLogic {
             return;
         }
         if (alive(Team.DEFENDERS).isEmpty()) win(Team.ATTACKERS, "<red>Атакующие взяли крепость!");
-        else if (alive(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<aqua>Атакующих не осталось — крепость устояла!");
+        else if (alive(Team.ATTACKERS).isEmpty()) win(Team.DEFENDERS, "<blue>Атакующих не осталось — крепость устояла!");
     }
 
     private void win(Team t, String reason) {
@@ -542,8 +543,13 @@ public final class SiegeLogic extends GameLogic {
     public boolean nametagVisible(Player viewer, Player target) {
         if (!hideEnemyNames) return true;
         Team a = team(viewer), b = team(target);
-        return a == null || b == null || a == b;
+        if (a == null || b == null || a == b) return true; // свои — всегда
+        // противник — только пока смотришь прямо на него и между вами нет стены
+        return enemyNameOnAim && session.plugin().sidebars().aimingAt(viewer, target);
     }
+
+    @Override
+    public boolean aimNametags() { return hideEnemyNames && enemyNameOnAim; }
 
     // ------------------------------------------------------------------ молот и способности
 
@@ -660,7 +666,7 @@ public final class SiegeLogic extends GameLogic {
             for (Player d : alive(Team.DEFENDERS)) if (!d.isGlowing()) d.setGlowing(true);
         }
         if (now >= end && session.isPlaying()) {
-            win(Team.DEFENDERS, "<aqua>Защитники продержались — крепость устояла!");
+            win(Team.DEFENDERS, "<blue>Защитники продержались — крепость устояла!");
             return;
         }
         for (Map.Entry<UUID, Integer> e : new ArrayList<>(respawnAt.entrySet())) {
@@ -689,7 +695,7 @@ public final class SiegeLogic extends GameLogic {
     public boolean handleAction(String action, Player target) {
         // mode: defenders-win | attackers-win — например, из цели на разрушение
         switch (action.trim().toLowerCase(Locale.ROOT)) {
-            case "defenders-win" -> { win(Team.DEFENDERS, "<aqua>Защитники победили!"); return true; }
+            case "defenders-win" -> { win(Team.DEFENDERS, "<blue>Защитники победили!"); return true; }
             case "attackers-win" -> { win(Team.ATTACKERS, "<red>Атакующие победили!"); return true; }
             default -> { return false; }
         }
