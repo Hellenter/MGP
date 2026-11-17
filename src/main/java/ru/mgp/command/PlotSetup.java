@@ -111,6 +111,14 @@ public final class PlotSetup {
         for (int i = 0; i < m.fortress.size(); i++) labels.add(label(plugin, p, w, m.fortress.get(i), "<light_purple><bold>Крепость " + (i + 1)));
         for (int i = 0; i < m.plots.size(); i++) labels.add(label(plugin, p, w, m.plots.get(i).region(), "<green><bold>Участок " + (i + 1)));
         for (MapConfig.Objective o : m.objectives) labels.add(label(plugin, p, w, o.region(), "<gray>Цель </gray>" + o.name()));
+        List<Map<?, ?>> stages = m.yaml.getMapList("stages");
+        for (int i = 0; i < stages.size(); i++) {
+            Map<String, List<Region>> z = ru.mgp.logic.AssaultLogic.zones(stages.get(i).get("zones"));
+            for (var e : z.entrySet())
+                for (int k = 0; k < e.getValue().size(); k++)
+                    labels.add(label(plugin, p, w, e.getValue().get(k), "<yellow><bold>Стадия " + (i + 1) + "</bold> <white>" + e.getKey()
+                            + (e.getValue().size() > 1 ? " <gray>(" + (k + 1) + "/" + e.getValue().size() + ")" : "")));
+        }
         LABELS.put(p.getUniqueId(), labels);
         Outline o = new Outline(plugin, p, w);
         for (MapConfig.Plot pl : m.plots) {
@@ -123,6 +131,11 @@ public final class PlotSetup {
         for (List<Region> l : m.teamZones.values()) {
             for (Region r : l) o.box(r, TEAM_BLOCK[ti % TEAM_BLOCK.length], TEAM_GLOW[ti % TEAM_GLOW.length]);
             ti++;
+        }
+        for (int i = 0; i < stages.size(); i++) {
+            Map<String, List<Region>> z = ru.mgp.logic.AssaultLogic.zones(stages.get(i).get("zones"));
+            for (List<Region> l : z.values())
+                for (Region r : l) o.box(r, STAGE_BLOCK[i % STAGE_BLOCK.length], STAGE_GLOW[i % STAGE_GLOW.length]);
         }
         for (Region r : m.fortress) o.box(r, Material.PURPLE_CONCRETE, Color.fromRGB(0xc050ff));
         for (MapConfig.Objective ob : m.objectives) o.box(ob.region(), Material.LIGHT_GRAY_CONCRETE, Color.SILVER);
@@ -145,6 +158,8 @@ public final class PlotSetup {
     private static final Map<UUID, BukkitTask> SHOWING = new HashMap<>();
     private static final Map<UUID, Outline> OUTLINES = new HashMap<>();
     private static final Material[] TEAM_BLOCK = {Material.ORANGE_CONCRETE, Material.BLUE_CONCRETE, Material.MAGENTA_CONCRETE, Material.GREEN_CONCRETE};
+    private static final Material[] STAGE_BLOCK = {Material.YELLOW_CONCRETE, Material.CYAN_CONCRETE, Material.PINK_CONCRETE, Material.WHITE_CONCRETE};
+    private static final Color[] STAGE_GLOW = {Color.YELLOW, Color.TEAL, Color.fromRGB(0xff80c0), Color.WHITE};
     private static final Color[] TEAM_GLOW = {Color.ORANGE, Color.BLUE, Color.FUCHSIA, Color.GREEN};
 
     private static final Map<UUID, List<org.bukkit.entity.Entity>> LABELS = new HashMap<>();

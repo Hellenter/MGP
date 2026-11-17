@@ -642,7 +642,7 @@ public final class MgpCommand implements TabExecutor {
                     org.bukkit.World w = mapWorld(p, m);
                     if (!p.getWorld().equals(w)) { Msg.send(p, "<red>Карта " + m.id + " в мире " + w.getName() + " — перейди туда"); return; }
                     PlotSetup.show(plugin, p, w, m, sec);
-                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>, <light_purple>крепость</light_purple>, <gray>цели</gray>; убрать — /mgp setup show " + m.id + " 0");
+                    Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>, <yellow>зоны стадий штурма</yellow> (подписаны), <light_purple>крепость</light_purple>, <gray>цели</gray>; убрать — /mgp setup show " + m.id + " 0");
                 }
                 case "trigger" -> {
                     need(a, 3);
