@@ -164,6 +164,10 @@ public final class MgpCommand implements TabExecutor {
             case "map" -> { if (admin(sender)) mapCommand(sender, a); }
             case "maps" -> { if (admin(sender)) setup(sender, new String[]{"maps"}); }
             case "check" -> { if (admin(sender)) check(sender, a); }
+            case "delete" -> {
+                if (!admin(sender)) return true;
+                if (sender instanceof Player p) setup(p, a); else Msg.send(sender, "Только в игре.");
+            }
             case "tools", "tool" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -788,6 +792,7 @@ public final class MgpCommand implements TabExecutor {
                     plugin.registry().reloadMode(m.id);
                     Msg.send(p, "<green>Точка ожидания для " + m.id + " задана.");
                 }
+                case "delete", "remove" -> deleteMap(p, a);
                 case "menu" -> {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
@@ -883,6 +888,37 @@ public final class MgpCommand implements TabExecutor {
         save(y, m.file);
         plugin.registry().loadMap(m.file);
         Msg.send(p, "<green>" + done + (implicitMap != null ? " <dark_gray>[" + implicitMap + "]" : ""));
+    }
+
+    /**
+     * /mgp setup delete <карта> [confirm] — удалить карту: maps/<карта>.yml и её шаблон templates/<шаблон>
+     * (шаблон — только если он не нужен другим картам). Без confirm только показывает, что удалится. Исходный мир не трогается.
+     */
+    private void deleteMap(Player p, String[] a) {
+        if (a.length < 2) { Msg.send(p, "<red>/mgp setup delete <карта> <gray>— id карты нужно написать явно"); return; }
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        boolean shared = plugin.registry().maps().stream().anyMatch(o -> o != m && m.template != null && m.template.equals(o.template));
+        boolean tpl = m.template != null && plugin.worlds().templateExists(m.template) && !shared;
+        if (a.length < 3 || !a[2].equalsIgnoreCase("confirm")) {
+            Msg.send(p, "<gold>Удалить карту <yellow>" + m.id + "</yellow>?</gold> <gray>Удалится файл maps/" + m.file.getName()
+                    + (tpl ? " и шаблон мира templates/" + m.template : shared ? " (шаблон " + m.template + " останется — он нужен другим картам)" : "")
+                    + ". Постройка в исходном мире не тронется, карту можно импортировать заново. Отменить удаление нельзя.");
+            p.sendMessage(Msg.parse("<red><click:run_command:'/mgp setup delete " + m.id + " confirm'><hover:show_text:'Удалить навсегда'>[Удалить навсегда]</hover></click>"));
+            return;
+        }
+        for (GameSession s : plugin.sessions().sessions())
+            if (s.map() != null && s.map().id.equals(m.id)) { Msg.send(p, "<red>На карте " + m.id + " сейчас идёт игра #" + s.id + " — дождись конца."); return; }
+        try {
+            java.nio.file.Files.deleteIfExists(m.file.toPath());
+            if (tpl) ru.mgp.util.FileUtil.deleteRecursive(plugin.worlds().templatesDir().resolve(m.template));
+        } catch (IOException e) {
+            Msg.send(p, "<red>Не удалось удалить: " + Msg.esc(String.valueOf(e.getMessage())));
+            return;
+        }
+        if (m.id.equals(plugin.mapContext().chosen(p))) plugin.mapContext().choose(p, null);
+        plugin.registry().load();
+        Msg.send(p, "<green>Карта " + m.id + " удалена" + (tpl ? " вместе с шаблоном " + m.template : "") + ".");
     }
 
     /** /mgp setup center <карта> auto — центр = середина спавнов (или области импорта), барьер — чтобы все спавны были внутри с запасом. */
@@ -1721,13 +1757,17 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("map", "check", "setup", "tools", "import", "maps", "start", "list", "reload", "panel", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("map", "check", "setup", "tools", "import", "maps", "delete", "start", "list", "reload", "panel", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
             } else if (a.length == 2 && (a[0].equalsIgnoreCase("help") || a[0].equals("?"))) {
                 out.addAll(Help.TITLES.keySet());
             } else if (a.length == 2 && a[0].equalsIgnoreCase("map") && s.hasPermission("mgp.admin")) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
                 out.addAll(List.of("tp", "off", "list"));
             } else if (a.length == 3 && a[0].equalsIgnoreCase("map") && a[1].equalsIgnoreCase("tp")) {
+                plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("delete") && s.hasPermission("mgp.admin")) {
+                plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 3 && a[1].equalsIgnoreCase("delete") && a[0].equalsIgnoreCase("setup")) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("check") && s.hasPermission("mgp.admin")) {
                 plugin.registry().maps().forEach(m -> out.add(m.id));
@@ -1774,7 +1814,7 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("help")) {
                 out.addAll(Help.TITLES.keySet());
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
-                out.addAll(List.of("menu", "check", "help", "export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
+                out.addAll(List.of("menu", "check", "help", "delete", "export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
                         "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info", "assault"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
