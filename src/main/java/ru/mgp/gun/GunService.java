@@ -192,7 +192,25 @@ public final class GunService implements Listener {
         }
         m.getPersistentDataContainer().set(kGun, PersistentDataType.STRING, g.id());
         it.setItemMeta(m);
+        noSwing(it);
         return it;
+    }
+
+    /** Без взмаха рукой при ЛКМ: иначе модель оружия в анимации удара закрывает пол-экрана. */
+    @SuppressWarnings("UnstableApiUsage")
+    private static void noSwing(ItemStack it) {
+        var none = io.papermc.paper.datacomponent.item.SwingAnimation.swingAnimation()
+                .type(io.papermc.paper.datacomponent.item.SwingAnimation.Animation.NONE).build();
+        if (!swingless(it, io.papermc.paper.datacomponent.DataComponentTypes.ATTACK_ANIMATION))
+            it.setData(io.papermc.paper.datacomponent.DataComponentTypes.ATTACK_ANIMATION, none);
+        if (!swingless(it, io.papermc.paper.datacomponent.DataComponentTypes.INTERACT_ANIMATION))
+            it.setData(io.papermc.paper.datacomponent.DataComponentTypes.INTERACT_ANIMATION, none);
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    private static boolean swingless(ItemStack it, io.papermc.paper.datacomponent.DataComponentType.Valued<io.papermc.paper.datacomponent.item.SwingAnimation> type) {
+        var a = it.getData(type);
+        return a != null && a.type() == io.papermc.paper.datacomponent.item.SwingAnimation.Animation.NONE;
     }
 
     /** Патроны. null, если такого типа нет. */
@@ -517,6 +535,7 @@ public final class GunService implements Listener {
                 }
                 continue;
             }
+            if (!swingless(it, io.papermc.paper.datacomponent.DataComponentTypes.ATTACK_ANIMATION)) noSwing(it); // оружие, выданное до 0.12.11
             if (sh == null) sh = shooter(p);
             UUID u = uid(it, false);
             GunState st = u == null ? null : states.get(u);
