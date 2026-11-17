@@ -49,6 +49,8 @@ final class SelectionWand implements Listener {
         return it;
     }
 
+    boolean isWandItem(ItemStack it) { return isWand(it); }
+
     private boolean isWand(ItemStack it) {
         return it != null && it.hasItemMeta() && it.getItemMeta().getPersistentDataContainer().has(key, PersistentDataType.BYTE);
     }

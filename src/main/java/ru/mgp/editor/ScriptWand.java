@@ -43,7 +43,6 @@ public final class ScriptWand implements Listener {
     private record Pick(PickKind kind, Consumer<Location> done, String hint) {}
 
     private static final class State {
-        String boundMap;
         String selected;          // id выделенного скрипта
         String selectedMap;
         Pick pick;
@@ -94,14 +93,14 @@ public final class ScriptWand implements Listener {
         if (mapId != null) {
             MapConfig m = plugin.registry().map(mapId);
             if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(mapId))); return; }
-            st.boundMap = m.id;
+            plugin.mapContext().choose(p, m.id);
         }
         boolean has = false;
         for (ItemStack it : p.getInventory().getContents()) if (isWand(it)) has = true;
         if (!has) p.getInventory().addItem(item());
         MapConfig m = map(p);
         Msg.send(p, "<gold>Палочка скриптов</gold> <gray>— ЛКМ по блоку (например, по люку), чтобы сделать из него скрипт.");
-        Msg.send(p, m != null ? "<gray>Карта: <yellow>" + Msg.esc(m.id) + (st.boundMap != null ? " <dark_gray>(закреплена, /mgp wand <карта> — сменить)" : " <dark_gray>(по месту, где ты стоишь)")
+        Msg.send(p, m != null ? "<gray>Карта: <yellow>" + Msg.esc(m.id) + " <dark_gray>(" + plugin.mapContext().current(p).how() + "; сменить — /mgp map <карта>)"
                 : "<red>Не понял, какая тут карта.</red> <gray>Укажи её: /mgp wand <карта>");
     }
 
@@ -109,30 +108,8 @@ public final class ScriptWand implements Listener {
 
     /** Карта, которую сейчас редактирует игрок: закреплённая, мир игры или область, из которой карту импортировали. */
     public MapConfig map(Player p) {
-        State st = state(p);
-        if (st.boundMap != null) {
-            MapConfig m = plugin.registry().map(st.boundMap);
-            if (m != null) return m;
-        }
-        GameSession s = plugin.sessions().byWorld(p.getWorld());
-        if (s != null && s.map() != null) return plugin.registry().map(s.map().id);
-        Location l = p.getLocation();
-        MapConfig best = null;
-        double bestVol = Double.MAX_VALUE;
-        for (MapConfig m : plugin.registry().maps()) {
-            if (!p.getWorld().getName().equals(m.yaml.getString("source.world"))) continue;
-            try {
-                Pos a = Pos.parse(m.yaml.getString("source.min")), b = Pos.parse(m.yaml.getString("source.max"));
-                if (a == null || b == null) continue;
-                BoundingBox box = BoundingBox.of(new Location(null, a.x(), a.y(), a.z()).toVector(), new Location(null, b.x(), b.y(), b.z()).toVector()).expand(8);
-                if (!box.contains(l.toVector())) continue;
-                double vol = box.getVolume();
-                if (vol < bestVol) { bestVol = vol; best = m; }
-            } catch (Exception ignored) {
-            }
-        }
-        if (best == null && plugin.registry().maps().size() == 1) best = plugin.registry().maps().iterator().next();
-        return best;
+        MapConfig m = plugin.mapContext() == null ? null : plugin.mapContext().map(p);
+        return m;
     }
 
     // ------------------------------------------------------------------ события

@@ -79,6 +79,7 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(npcs, this);
         npcs.start();
 
+        mapContext = new ru.mgp.command.MapContext(this);
         MgpCommand cmd = new MgpCommand(this);
         this.mgpCommand = cmd;
         for (String name : new String[]{"mgp", "leave", "play"}) {
@@ -162,6 +163,10 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.editor.ScriptWand wand;
     public ru.mgp.editor.ScriptWand wand() { return wand; }
+
+    private ru.mgp.command.MapContext mapContext;
+    /** Текущая карта строителя (по месту или /mgp map). */
+    public ru.mgp.command.MapContext mapContext() { return mapContext; }
 
     private ru.mgp.npc.NpcService npcs;
     public ru.mgp.npc.NpcService npcs() { return npcs; }

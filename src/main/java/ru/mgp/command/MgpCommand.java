@@ -36,7 +36,16 @@ public final class MgpCommand implements TabExecutor {
         this.selOps = new SelectionOps(pos1, pos2, posWorld, display::update);
         this.selWand = new SelectionWand(plugin, this::setPos);
         plugin.getServer().getPluginManager().registerEvents(selWand, plugin);
+        this.tools = new BuilderTools(plugin, this, selWand);
+        plugin.getServer().getPluginManager().registerEvents(tools, plugin);
     }
+
+    private final BuilderTools tools;
+
+    BuilderTools tools() { return tools; }
+
+    /** Карта, подставленная в текущую команду setup автоматически (её id не писали), или null. */
+    private String implicitMap;
 
     private final SelectionWand selWand;
 
@@ -125,7 +134,7 @@ public final class MgpCommand implements TabExecutor {
             }
             return true;
         }
-        if (a.length == 0 || a[0].equalsIgnoreCase("help")) { help(sender); return true; }
+        if (a.length == 0 || a[0].equalsIgnoreCase("help") || a[0].equals("?")) { Help.show(plugin, sender, a.length > 1 ? a[1] : null); return true; }
         switch (a[0].toLowerCase(Locale.ROOT)) {
             case "join" -> {
                 if (sender instanceof Player p && a.length > 1) plugin.sessions().join(p, a[1]);
@@ -152,6 +161,14 @@ public final class MgpCommand implements TabExecutor {
                 Msg.send(sender, "<green>Конфиги перезагружены (идущие игры доиграют со старыми настройками).");
             }
             case "setup" -> { if (admin(sender)) setup(sender, Arrays.copyOfRange(a, 1, a.length)); }
+            case "map" -> { if (admin(sender)) mapCommand(sender, a); }
+            case "maps" -> { if (admin(sender)) setup(sender, new String[]{"maps"}); }
+            case "check" -> { if (admin(sender)) check(sender, a); }
+            case "tools", "tool" -> {
+                if (!admin(sender)) return true;
+                if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
+                tools.give(p);
+            }
             case "import" -> { if (admin(sender)) importMap(sender, a); }
             case "sethub" -> {
                 if (!admin(sender)) return true;
@@ -163,7 +180,10 @@ public final class MgpCommand implements TabExecutor {
                 plugin.saveConfig();
                 Msg.send(p, "<green>Спавн хаба: " + p.getWorld().getName() + " " + pos.serialize() + ". Сюда попадают при входе, после игры и по /hub.");
             }
-            case "rename" -> { if (admin(sender)) renameMap(sender, a); }
+            case "rename" -> {
+                if (!admin(sender)) return true;
+                if (sender instanceof Player p) setup(p, a); else renameMap(sender, a);
+            }
             case "shop", "shops" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -216,6 +236,7 @@ public final class MgpCommand implements TabExecutor {
             }
             case "optimize" -> {
                 if (!admin(sender)) return true;
+                if (sender instanceof Player p) { setup(p, a); return true; }
                 try { optimizeMap(sender, a); } catch (IllegalArgumentException e) { Msg.send(sender, "<red>" + Msg.esc(String.valueOf(e.getMessage()))); }
             }
             case "panel" -> {
@@ -229,9 +250,90 @@ public final class MgpCommand implements TabExecutor {
                 Msg.send(sender, "<gray>Ссылка содержит ключ доступа — не показывай её другим.");
                 if (!(sender instanceof Player)) sender.sendMessage(url);
             }
-            default -> help(sender);
+            default -> Help.unknown(sender, "/mgp ", a[0], Help.topLevel(sender));
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------ текущая карта
+
+    /** /mgp map [карта|off|tp [карта]|list] */
+    private void mapCommand(CommandSender sender, String[] a) {
+        if (!(sender instanceof Player p)) { setup(sender, new String[]{"maps"}); return; }
+        String arg = a.length > 1 ? a[1].toLowerCase(Locale.ROOT) : "";
+        var ctx = plugin.mapContext();
+        switch (arg) {
+            case "" -> {
+                MapContext.Current c = ctx.current(p);
+                if (c == null) {
+                    Msg.send(p, "<yellow>Текущая карта не определена: <gray>встань внутри импортированной карты или выбери её:");
+                    mapList(p);
+                    return;
+                }
+                MapConfig m = c.map();
+                var items = MapCheck.run(plugin, m);
+                p.sendMessage(Msg.parse("<gold>Текущая карта: <yellow>" + m.id + "</yellow> " + m.displayName + " <dark_gray>(" + c.how() + ")"));
+                p.sendMessage(Msg.parse("<gray>Режимы: <white>" + Msg.esc(String.join(", ", MapCheck.modesOf(m))) + "<gray>, готовность: " + MapCheck.summary(items)));
+                p.sendMessage(Msg.parse(mapButtons(m.id)));
+            }
+            case "off", "clear", "none" -> { ctx.choose(p, null); Msg.send(p, "<gray>Выбор карты сброшен — карта снова определяется по месту, где ты стоишь."); }
+            case "list" -> mapList(p);
+            case "tp" -> {
+                MapConfig m = a.length > 2 ? plugin.registry().map(a[2]) : ctx.map(p);
+                if (m == null) { Msg.send(p, "<red>Какая карта? /mgp map tp <карта>"); return; }
+                Location to = MapContext.anchor(p, m);
+                if (to == null) { Msg.send(p, "<red>У карты " + m.id + " нет ни спавнов, ни области импорта — некуда телепортировать."); return; }
+                ctx.choose(p, m.id);
+                p.teleport(to);
+                Msg.send(p, "<green>Ты на карте " + m.id + ".");
+            }
+            default -> {
+                MapConfig m = plugin.registry().map(a[1]);
+                if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                ctx.choose(p, m.id);
+                MapContext.Current c = ctx.current(p);
+                if (c != null && c.map() != m) {
+                    Msg.send(p, "<yellow>Карта " + m.id + " выбрана, но ты стоишь в карте " + c.map().id + " — пока ты здесь, команды пойдут в неё.");
+                    p.sendMessage(Msg.parse("<aqua><click:run_command:'/mgp map tp " + m.id + "'>[телепорт на " + m.id + "]</click>"));
+                    return;
+                }
+                Msg.send(p, "<green>Текущая карта: " + m.id + ". <gray>Теперь id карты в /mgp setup можно не писать.");
+                boolean far = !p.getWorld().equals(MapContext.world(p, m)) || MapContext.sourceRegion(m) != null && c != null && c.source() == MapContext.Source.CHOSEN;
+                p.sendMessage(Msg.parse(mapButtons(m.id) + (far ? " <aqua><click:run_command:'/mgp map tp " + m.id + "'>[телепорт]</click>" : "")));
+            }
+        }
+    }
+
+    static String mapButtons(String id) {
+        return "<dark_gray>» <aqua><click:run_command:'/mgp setup menu " + id + "'><hover:show_text:'Меню настройки карты'>[меню]</hover></click> "
+                + "<click:run_command:'/mgp check " + id + "'><hover:show_text:'Что настроено и чего не хватает'>[чек-лист]</hover></click> "
+                + "<click:run_command:'/mgp setup show " + id + "'><hover:show_text:'Подсветить зоны частицами'>[показать]</hover></click> "
+                + "<click:run_command:'/mgp tools'><hover:show_text:'Топор выделения, жезл точек, меню карты'>[инструменты]</hover></click></aqua>";
+    }
+
+    private void mapList(Player p) {
+        StringBuilder sb = new StringBuilder("<gray>Карты: ");
+        int i = 0;
+        for (MapConfig m : plugin.registry().maps()) {
+            if (i++ > 0) sb.append("<dark_gray>, ");
+            var items = MapCheck.run(plugin, m);
+            String color = MapCheck.count(items, MapCheck.Level.ERROR) > 0 ? "<red>" : MapCheck.count(items, MapCheck.Level.WARN) > 0 ? "<yellow>" : "<green>";
+            sb.append("<click:run_command:'/mgp map ").append(m.id).append("'><hover:show_text:'").append(Msg.esc(m.mode)).append(" — ")
+                    .append(MapCheck.summary(items).replace("'", "")).append("<newline><gray>Клик — выбрать'>").append(color).append(m.id).append("</hover></click>");
+        }
+        if (i == 0) sb.append("<red>нет. <gray>Импорт: выдели область и /mgp import <карта> <режим>");
+        p.sendMessage(Msg.parse(sb.toString()));
+    }
+
+    /** /mgp check [карта] — чек-лист готовности; без карты — текущая, а если её нет — сводка по всем. */
+    private void check(CommandSender sender, String[] a) {
+        MapConfig m = a.length > 1 ? plugin.registry().map(a[1]) : sender instanceof Player p ? plugin.mapContext().map(p) : null;
+        if (a.length > 1 && m == null) { Msg.send(sender, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        if (m != null) { MapCheck.print(plugin, sender, m); return; }
+        Msg.send(sender, "<gold>Готовность карт:");
+        for (MapConfig mm : plugin.registry().maps())
+            sender.sendMessage(Msg.parse("<click:run_command:'/mgp check " + mm.id + "'><hover:show_text:'Подробно'><gray>• <white>" + mm.id
+                    + " <dark_gray>(" + Msg.esc(String.join(", ", MapCheck.modesOf(mm))) + ")<gray>: " + MapCheck.summary(MapCheck.run(plugin, mm)) + "</hover></click>"));
     }
 
     /** /mgp debug [режим] — что плагин на самом деле видит: тиры сундуков, лут, ломаемые блоки, состояние игрока. */
@@ -295,73 +397,75 @@ public final class MgpCommand implements TabExecutor {
         return false;
     }
 
-    private void help(CommandSender s) {
-        Msg.send(s, "<yellow>/play [режим]</yellow> — меню игр или быстрый вход");
-        Msg.send(s, "<yellow>/leave</yellow> — выйти в лобби");
-        if (s.hasPermission("mgp.admin")) {
-            Msg.send(s, "<gold>/mgp start | list | reload | panel");
-            Msg.send(s, "<gold>/mgp hotbar [on|off]</gold> — предметы хаба (выбор игры, серверы) у себя; в креативе их нет автоматически");
-            Msg.send(s, "<gold>/mgp sethub</gold> — спавн хаба там, где ты стоишь (с поворотом головы)");
-            Msg.send(s, "<gold>/mgp setup</gold> — список команд настройки карт");
-            Msg.send(s, "<gold>/mgp import <карта> <режим> <x1 y1 z1 x2 y2 z2> [мир] [название]</gold> — вырезать готовую карту из мира");
-            Msg.send(s, "<gray>   без координат берётся выделение /mgp setup pos1 и pos2");
-            Msg.send(s, "<gold>/mgp kit save <режим> <id> [команда]</gold> — сохранить свой инвентарь как набор режима (слоты, броня); <gold>kit list|load|delete</gold>");
-            Msg.send(s, "<gold>/mgp arrow [кол-во] [тип]</gold> — разрывные стрелы (для наборов: потом /mgp kit save); взрыв — settings.explosive-arrows режима");
-            Msg.send(s, "<gold>/mgp npc create <id> [карта]</gold> — NPC (в режим, меню игр, действия); настройка — Shift+ПКМ по нему; <gold>npc list|edit|tp|delete</gold>");
-            Msg.send(s, "<gold>/mgp shop [id]</gold> — магазины в стиле Bed Wars: редактор в игре, продавцы на картах");
-            Msg.send(s, "<gold>/mgp wand [карта]</gold> — палочка скриптов: ЛКМ по блоку — телепорты, кнопки, ловушки без командных блоков");
-            Msg.send(s, "<gold>/mgp rename <карта> <новый id> [название]</gold> — переименовать карту");
-            Msg.send(s, "<gold>/mgp optimize <карта></gold> — оптимизация границ готовой карты: обрезать края, где только воздух");
-        }
-    }
-
     // ------------------------------------------------------------------ setup
 
     private void setup(CommandSender sender, String[] a) {
         if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return; }
         if (a.length == 0) {
-            for (String line : List.of(
-                    "<gold>Настройка карт (стой в мире карты, координаты берутся с тебя):",
-                    "<yellow>/mgp setup export <шаблон></yellow> — скопировать текущий мир в templates/",
-                    "<yellow>/mgp setup create <карта> <режим> <шаблон>",
-                    "<yellow>/mgp setup spawn <карта></yellow> — добавить спавн игрока",
-                    "<yellow>/mgp setup delspawn <карта> [номер|last]</yellow> — удалить ближайший к тебе спавн (или по номеру)",
-                    "<yellow>/mgp setup spawns <карта></yellow> — список спавнов с номерами",
-                    "<yellow>/mgp setup clearspawns <карта></yellow> — удалить все спавны",
-                    "<yellow>/mgp setup spectator <карта></yellow> — точка наблюдателей",
-                    "<yellow>/mgp setup seekerspawn <карта> [none]</yellow> — комната ищущих в прятках",
-                    "<yellow>/mgp setup modes <карта> [режим...]</yellow> — в каких режимах играется карта (без режимов — меню); <yellow>/mgp setup maps</yellow> — карты по режимам",
-                    "<yellow>/mgp setup alsomode <карта> <режим|-режим></yellow> — карта играется и в другом режиме",
-                    "<yellow>/mgp setup center <карта> [размер барьера]",
-                    "<yellow>/mgp setup chest <карта> <тир></yellow> — сундук, на который смотришь",
-                    "<yellow>/mgp setup trader <карта> <набор сделок> [профессия]",
-                    "<yellow>/mgp setup pos1 | pos2</yellow> — углы области там, где стоишь; <yellow>/mgp setup wand</yellow> — топор выделения: ЛКМ по блоку pos1, ПКМ pos2",
-                    "<yellow>/mgp setup expand <n> [обратно] [направление]</yellow> — расширить как //expand (vert — на всю высоту); contract, shift, outset, inset",
-                    "<yellow>/mgp setup teamspawn <карта> <команда|all> [группа] [locked]</yellow> — спавн команды (seeker, hider...) или закрытый до триггера",
-                    "<yellow>/mgp setup fortress <карта> [clear|list|del <n>|tp <n>]</yellow> — крепость для осады из выделения (спавны: teamspawn defenders / attackers)",
-                    "<yellow>/mgp setup objective <карта> <id> <процент></yellow> — цель на разрушение из выделения; <yellow>objective ... action</yellow>, <yellow>objectives <карта></yellow>",
-                    "<yellow>/mgp setup sel</yellow> — меню граней выделения; <yellow>face <грань> <коорд.|+n|-n|here></yellow>, <yellow>box x1 y1 z1 x2 y2 z2</yellow>",
-                    "<yellow>/mgp setup clearsel</yellow> — убрать выделение и рамку",
-                    "<yellow>/mgp setup optimize <карта></yellow> — оптимизация границ: обрезать пустые края (только воздух)",
-                    "<yellow>/mgp setup rename <карта> <новый id> [название]</yellow> — переименовать карту",
-                    "<yellow>/mgp setup name <карта> <название></yellow> — только название для игроков (MiniMessage, например <green>Джунгли)",
-                    "<yellow>/mgp setup plot <карта></yellow> — участок из pos1/pos2, спавн = ты; <yellow>plots <карта></yellow> — список, <yellow>delplot <карта> <n></yellow>",
-                    "<yellow>/mgp setup wall <карта> [auto [зазор]|clear]</yellow> — стены между участками (исчезают после стройки); <yellow>arena <карта></yellow> — центр арены",
-                    "<yellow>/mgp setup show <карта> [сек]</yellow> — подсветить частицами участки, стены, центр арены, play-зону и зоны команд",
-                    "<yellow>/mgp setup zone <карта> [clear]</yellow> — play-зона из выделения: за неё не выйти, вылетевших возвращает",
-                    "<yellow>/mgp setup teamzone <карта> <команда> [clear]</yellow> — стартовая зона команды; <yellow>teamzone <карта> open <сек></yellow> — когда границы снимаются",
-                    "<yellow>/mgp setup trigger <карта> <имя> [once|per_player|repeat]",
-                    "<yellow>/mgp setup assault <карта></yellow> — штурм: стадии, цели стадий, спавны стадий, лимбо и выход из него",
-                    "<yellow>/mgp setup waiting <режим></yellow> — точка в лобби ожидания",
-                    "<yellow>/mgp setup lobby <режим></yellow> — вырезать лобби ожидания из pos1/pos2, спавн = ты",
-                    "<yellow>/mgp setup lobby default</yellow> — общее лобби ожидания для всех режимов без своего",
-                    "<yellow>/mgp setup biome <карта> <биом|none></yellow> — биом на всю карту",
-                    "<yellow>/mgp setup script <карта> <id> hold|button|plate|zone</yellow> — скрипт на блоке, на который смотришь",
-                    "<yellow>/mgp setup script <карта> <id> tphere | action <действие> | set <ключ> <знач> | clear | remove",
-                    "<yellow>/mgp setup scripts <карта></yellow> — список скриптов карты",
-                    "<yellow>/mgp setup info <карта>")) Msg.send(p, line);
+            MapConfig cur = plugin.mapContext().map(p);
+            if (cur != null) new SetupMenu(plugin, this, cur, p).open(p);
+            else Help.show(plugin, p, "maps");
             return;
         }
+        if (a[0].equalsIgnoreCase("help") || a[0].equals("?")) { Help.show(plugin, p, a.length > 1 ? a[1] : "maps"); return; }
+        String sub0 = a[0].toLowerCase(Locale.ROOT);
+        implicitMap = null;
+        if (MAP_SUBS.contains(sub0) && (a.length < 2 || plugin.registry().map(a[1]) == null)) {
+            MapContext.Current cur = plugin.mapContext().current(p);
+            if (cur == null) {
+                if (a.length > 1) Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1])));
+                else Msg.send(p, "<red>Какая карта? <gray>Встань внутри карты, выбери её <yellow>/mgp map <карта></yellow> или допиши id: /mgp setup " + sub0 + " <карта>");
+                return;
+            }
+            if (a.length > 1 && !fitsWithoutMap(sub0, a)) {
+                Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1])) + " <gray>(текущая карта — " + cur.map().id + ")");
+                return;
+            }
+            String[] b2 = new String[a.length + 1];
+            b2[0] = a[0];
+            b2[1] = cur.map().id;
+            System.arraycopy(a, 1, b2, 2, a.length - 1);
+            a = b2;
+            implicitMap = cur.map().id;
+        }
+        try {
+            setupDispatch(p, a);
+        } finally {
+            implicitMap = null;
+        }
+    }
+
+    /** Подкоманды /mgp setup, у которых второй аргумент — карта (его можно не писать, если карта текущая). */
+    static final Set<String> MAP_SUBS = Set.of("spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "modes", "alsomode",
+            "center", "chest", "trader", "teamspawn", "objective", "objectives", "fortress", "tpspawn", "optimize", "rename", "name", "biome",
+            "plot", "plots", "delplot", "tpplot", "arena", "wall", "zone", "teamzone", "show", "trigger", "script", "scripts", "info", "assault",
+            "check", "menu");
+
+    /** Можно ли понять a[1] как следующий аргумент команды (а не как опечатку в id карты). */
+    private boolean fitsWithoutMap(String sub, String[] a) {
+        String x = a[1].toLowerCase(Locale.ROOT);
+        boolean num = x.matches("\\d+");
+        return switch (sub) {
+            case "spawn", "spawns", "clearspawns", "spectator", "objectives", "plots", "arena", "scripts", "info", "check", "optimize", "plot", "menu" -> false;
+            case "center" -> num || x.equals("auto");
+            case "show" -> num;
+            case "zone" -> x.equals("clear");
+            case "seekerspawn" -> x.equals("none");
+            case "delspawn" -> num || x.equals("last");
+            case "tpspawn" -> num || x.matches("p\\d+");
+            case "delplot", "tpplot" -> num;
+            case "wall" -> x.equals("auto") || x.equals("clear");
+            case "fortress" -> List.of("clear", "list", "del", "tp").contains(x);
+            case "modes" -> plugin.registry().mode(x) != null;
+            case "alsomode" -> plugin.registry().mode(x.startsWith("-") ? x.substring(1) : x) != null;
+            case "assault" -> List.of("stage", "limbo", "exit", "info", "list").contains(x);
+            case "biome" -> x.equals("none") || x.equals("off") || ru.mgp.world.WorldService.biome(x) != null;
+            case "rename" -> a.length == 2;
+            default -> true; // teamspawn, teamzone, objective, chest, trader, name, trigger, script — свободный текст
+        };
+    }
+
+    private void setupDispatch(Player p, String[] a) {
         String sub = a[0].toLowerCase(Locale.ROOT);
         Location loc = p.getLocation();
         try {
@@ -498,12 +602,15 @@ public final class MgpCommand implements TabExecutor {
                         for (int i = 0; i < ms.size(); i++) {
                             MapConfig mm = ms.get(i);
                             if (i > 0) sb.append("<gray>, ");
-                            sb.append("<click:run_command:'/mgp setup modes ").append(mm.id).append("'><hover:show_text:'Режимы карты'>")
-                                    .append(plugin.sessions().playable(mm) ? "<white>" : "<red>").append(mm.id).append("</hover></click>");
+                            var items = MapCheck.run(plugin, mm);
+                            String color = !plugin.sessions().playable(mm) || MapCheck.count(items, MapCheck.Level.ERROR) > 0 ? "<red>"
+                                    : MapCheck.count(items, MapCheck.Level.WARN) > 0 ? "<yellow>" : "<green>";
+                            sb.append("<click:run_command:'/mgp map ").append(mm.id).append("'><hover:show_text:'").append(MapCheck.summary(items))
+                                    .append("<newline><gray>Клик — выбрать карту'>").append(color).append(mm.id).append("</hover></click>");
                         }
                         p.sendMessage(Msg.parse(sb.toString()));
                     }
-                    Msg.send(p, "<gray>Клик по карте — выбрать её режимы. Красным — карта без шаблона или спавнов.");
+                    Msg.send(p, "<gray>Клик по карте — выбрать её. <green>Готова</green>, <yellow>есть предупреждения</yellow>, <red>не готова</red> — подробно: /mgp check <карта>");
                 }
                 case "alsomode" -> {
                     need(a, 3);
@@ -518,10 +625,13 @@ public final class MgpCommand implements TabExecutor {
                         y.set("also-modes", l.isEmpty() ? null : l);
                     }, remove ? "Режим " + id + " убран у карты" : "Карта теперь играется и в режиме " + id);
                 }
-                case "center" -> edit(p, a, 2, y -> {
-                    y.set("center", Pos.ofBlock(loc).serialize());
-                    if (a.length > 2) y.set("border-size", Double.parseDouble(a[2]));
-                }, "Центр задан");
+                case "center" -> {
+                    if (a.length > 2 && a[2].equalsIgnoreCase("auto")) { autoCenter(p, a); return; }
+                    edit(p, a, 2, y -> {
+                        y.set("center", Pos.ofBlock(loc).serialize());
+                        if (a.length > 2) y.set("border-size", Double.parseDouble(a[2]));
+                    }, "Центр задан" + (a.length > 2 ? ", барьер " + a[2] : ""));
+                }
                 case "chest" -> {
                     need(a, 3);
                     Block b = p.getTargetBlockExact(6);
@@ -678,6 +788,14 @@ public final class MgpCommand implements TabExecutor {
                     plugin.registry().reloadMode(m.id);
                     Msg.send(p, "<green>Точка ожидания для " + m.id + " задана.");
                 }
+                case "menu" -> {
+                    need(a, 2);
+                    MapConfig m = plugin.registry().map(a[1]);
+                    if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+                    plugin.mapContext().choose(p, m.id);
+                    new SetupMenu(plugin, this, m, p).open(p);
+                }
+                case "check" -> check(p, new String[]{"check", a[1]});
                 case "info" -> {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
@@ -697,7 +815,7 @@ public final class MgpCommand implements TabExecutor {
                     }
                     listSpawns(p, a);
                 }
-                default -> setup(p, new String[0]);
+                default -> Help.unknown(p, "/mgp setup ", sub, Help.SETUP_SUBS);
             }
         } catch (IllegalArgumentException e) {
             Msg.send(p, "<red>" + Msg.esc(String.valueOf(e.getMessage())));
@@ -764,7 +882,35 @@ public final class MgpCommand implements TabExecutor {
         fn.apply(y);
         save(y, m.file);
         plugin.registry().loadMap(m.file);
-        Msg.send(p, "<green>" + done);
+        Msg.send(p, "<green>" + done + (implicitMap != null ? " <dark_gray>[" + implicitMap + "]" : ""));
+    }
+
+    /** /mgp setup center <карта> auto — центр = середина спавнов (или области импорта), барьер — чтобы все спавны были внутри с запасом. */
+    private void autoCenter(Player p, String[] a) {
+        MapConfig m = plugin.registry().map(a[1]);
+        if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
+        List<Pos> sp = MapCheck.allSpawns(m);
+        double cx, cy, cz;
+        if (!sp.isEmpty()) {
+            cx = sp.stream().mapToDouble(Pos::x).average().orElse(0);
+            cy = sp.stream().mapToDouble(Pos::y).average().orElse(0);
+            cz = sp.stream().mapToDouble(Pos::z).average().orElse(0);
+        } else {
+            ru.mgp.util.Region r = MapContext.sourceRegion(m);
+            if (r == null) { Msg.send(p, "<red>Не из чего посчитать центр: нет ни спавнов, ни области импорта. Встань в центр: /mgp setup center " + m.id); return; }
+            cx = (r.minX() + r.maxX()) / 2.0; cy = r.minY(); cz = (r.minZ() + r.maxZ()) / 2.0;
+        }
+        Pos c = new Pos(Math.floor(cx), Math.floor(cy), Math.floor(cz), 0, 0);
+        double far = 0;
+        for (Pos s : sp) far = Math.max(far, Math.max(Math.abs(s.x() - cx), Math.abs(s.z() - cz)));
+        ru.mgp.util.Region r = MapContext.sourceRegion(m);
+        if (r != null) far = Math.max(far, Math.max(Math.max(cx - r.minX(), r.maxX() - cx), Math.max(cz - r.minZ(), r.maxZ() - cz)));
+        int border = m.borderSize > 0 ? (int) m.borderSize : (int) Math.ceil(far * 2 + 20);
+        edit(p, a, 2, y -> {
+            y.set("center", c.serialize());
+            if (m.borderSize <= 0) y.set("border-size", (double) border);
+        }, "Центр " + c.serialize() + (sp.isEmpty() ? " (середина области карты)" : " (середина " + sp.size() + " спавнов)") + ", барьер " + border
+                + ". Поменять барьер: /mgp setup center " + m.id + " <размер>");
     }
 
     /** /mgp setup lobby <режим>: область pos1/pos2 -> templates/<шаблон лобби>, waiting.spawn = позиция игрока. */
@@ -882,9 +1028,20 @@ public final class MgpCommand implements TabExecutor {
         }
     }
 
+    /** Размер выделения игрока («10×5×10») или null. */
+    String selectionSize(Player p) { return selOps.has(p) ? selOps.size(p) : null; }
+
+    boolean hasSelection(Player p) { return pos1.containsKey(p.getUniqueId()) && pos2.containsKey(p.getUniqueId()); }
+
+    ItemStack selectionWand() { return selWand.item(); }
+
     private Pos[] selection(Player p) {
         Pos a = pos1.get(p.getUniqueId()), b = pos2.get(p.getUniqueId());
-        if (a == null || b == null) { Msg.send(p, "<red>Сначала задай /mgp setup pos1 и pos2"); return null; }
+        if (a == null || b == null) {
+            p.sendMessage(Msg.parse("<red>Сначала выдели область: <gray>золотой топор — ЛКМ и ПКМ по углам "
+                    + "<aqua><click:run_command:'/mgp setup wand'>[взять топор]</click></aqua> <gray>или /mgp setup pos1 и pos2"));
+            return null;
+        }
         return new Pos[]{a, b};
     }
 
@@ -1516,16 +1673,64 @@ public final class MgpCommand implements TabExecutor {
 
     // ------------------------------------------------------------------ tab
 
+    /** Команды, которые бывают в режимах карты: attackers/defenders, hider/seeker. */
+    static List<String> teamsOf(MapConfig m) {
+        if (m == null) return List.of("attackers", "defenders", "hider", "seeker");
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        for (String id : MapCheck.modesOf(m)) {
+            ModeConfig mc = m == null ? null : ru.mgp.MGPPlugin.getPlugin(ru.mgp.MGPPlugin.class).registry().mode(id);
+            String type = mc == null ? id : mc.type;
+            switch (type) {
+                case "siege", "assault" -> { out.add("attackers"); out.add("defenders"); }
+                case "hide_and_seek" -> { out.add("hider"); out.add("seeker"); }
+                default -> {}
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender s, Command cmd, String label, String[] a) {
-        List<String> out = new ArrayList<>();
         String name = cmd.getName().toLowerCase(Locale.ROOT);
+        // id карты можно не писать: подсказываем и карты, и то, что идёт после карты (для текущей карты)
+        if (name.equals("mgp") && a.length >= 3 && a[0].equalsIgnoreCase("setup") && s instanceof Player p && s.hasPermission("mgp.admin")
+                && MAP_SUBS.contains(a[1].toLowerCase(Locale.ROOT)) && plugin.registry().map(a[2]) == null) {
+            MapConfig cur = plugin.mapContext().map(p);
+            if (cur != null) {
+                String[] b = new String[a.length + 1];
+                b[0] = a[0]; b[1] = a[1]; b[2] = cur.id;
+                System.arraycopy(a, 2, b, 3, a.length - 2);
+                LinkedHashSet<String> out = new LinkedHashSet<>(tabRaw(s, name, b));
+                if (a.length == 3) out.addAll(tabRaw(s, name, a));
+                return new ArrayList<>(out);
+            }
+        }
+        if (name.equals("mgp") && a.length >= 2 && (a[0].equalsIgnoreCase("rename") || a[0].equalsIgnoreCase("optimize"))) {
+            String[] b = new String[a.length + 1];
+            b[0] = "setup";
+            System.arraycopy(a, 0, b, 1, a.length);
+            return onTabComplete(s, cmd, label, b);
+        }
+        return tabRaw(s, name, a);
+    }
+
+    private List<String> tabRaw(CommandSender s, String name, String[] a) {
+        List<String> out = new ArrayList<>();
         if (name.equals("play") && a.length == 1) {
             plugin.registry().modes().forEach(m -> out.add(m.id));
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("map", "check", "setup", "tools", "import", "maps", "start", "list", "reload", "panel", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
+            } else if (a.length == 2 && (a[0].equalsIgnoreCase("help") || a[0].equals("?"))) {
+                out.addAll(Help.TITLES.keySet());
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("map") && s.hasPermission("mgp.admin")) {
+                plugin.registry().maps().forEach(m -> out.add(m.id));
+                out.addAll(List.of("tp", "off", "list"));
+            } else if (a.length == 3 && a[0].equalsIgnoreCase("map") && a[1].equalsIgnoreCase("tp")) {
+                plugin.registry().maps().forEach(m -> out.add(m.id));
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("check") && s.hasPermission("mgp.admin")) {
+                plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("debug") && s.hasPermission("mgp.admin")) {
                 out.add("solo");
                 out.addAll(plugin.registry().modes().stream().map(m -> m.id).toList());
@@ -1566,8 +1771,10 @@ public final class MgpCommand implements TabExecutor {
                 org.bukkit.Bukkit.getWorlds().forEach(w -> out.add(w.getName()));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("join")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
+            } else if (a.length == 3 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("help")) {
+                out.addAll(Help.TITLES.keySet());
             } else if (a.length == 2 && a[0].equalsIgnoreCase("setup")) {
-                out.addAll(List.of("export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
+                out.addAll(List.of("menu", "check", "help", "export", "create", "spawn", "delspawn", "spawns", "clearspawns", "spectator", "seekerspawn", "alsomode", "center", "chest", "wand",
                         "trader", "modes", "maps", "teamspawn", "objective", "objectives", "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize", "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "wall", "arena", "show", "zone", "teamzone", "trigger", "script", "scripts", "waiting", "lobby", "info", "assault"));
             } else if (a.length >= 3 && a[0].equalsIgnoreCase("setup") && List.of("expand", "contract", "shift", "outset", "inset", "face", "box").contains(a[1].toLowerCase(Locale.ROOT))) {
                 String sub = a[1].toLowerCase(Locale.ROOT);
@@ -1579,7 +1786,8 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 3 && a[0].equalsIgnoreCase("setup")) {
                 if (a[1].equalsIgnoreCase("waiting") || a[1].equalsIgnoreCase("lobby")) plugin.registry().modes().forEach(m -> out.add(m.id));
                 if (a[1].equalsIgnoreCase("lobby")) out.add("default");
-                else if (!a[1].equalsIgnoreCase("export") && !a[1].equalsIgnoreCase("create"))
+                else if (a[1].equalsIgnoreCase("export") || a[1].equalsIgnoreCase("create")) { /* новый id */ }
+                else if (MAP_SUBS.contains(a[1].toLowerCase(Locale.ROOT)))
                     plugin.registry().maps().forEach(m -> out.add(m.id));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script")) {
                 MapConfig mc = plugin.registry().map(a[2]);
@@ -1593,7 +1801,11 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("assault")) {
                 if (a.length == 4) out.addAll(List.of("stage", "limbo", "exit", "info"));
                 else if (a.length == 5 && a[3].equalsIgnoreCase("limbo")) out.addAll(List.of("attackers", "defenders"));
-                else if (a.length == 5 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("1", "2", "3"));
+                else if (a.length == 5 && a[3].equalsIgnoreCase("stage")) {
+                    MapConfig mc = plugin.registry().map(a[2]);
+                    int n = mc == null ? 0 : mc.yaml.getMapList("stages").size();
+                    for (int i = 1; i <= n + 1; i++) out.add(String.valueOf(i));
+                }
                 else if (a.length == 6 && a[3].equalsIgnoreCase("stage")) out.addAll(List.of("15:00", "objective", "spawn", "zone", "require", "action", "clearactions", "remove"));
                 else if (a.length == 7 && a[3].equalsIgnoreCase("stage") && (a[5].equalsIgnoreCase("spawn") || a[5].equalsIgnoreCase("zone"))) out.addAll(List.of("attackers", "defenders"));
                 else if (a.length == 8 && a[3].equalsIgnoreCase("stage") && a[5].equalsIgnoreCase("zone")) out.add("clear");
@@ -1603,9 +1815,18 @@ public final class MgpCommand implements TabExecutor {
                     if (mc != null) mc.objectives.forEach(o -> { out.add(o.id()); out.add("-" + o.id()); });
                 }
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
-                out.addAll(List.of("all", "seeker", "hider", "defenders", "attackers"));
+                out.add("all");
+                out.addAll(teamsOf(plugin.registry().map(a[2])));
+            } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
+                MapConfig mc = plugin.registry().map(a[2]);
+                if (mc != null) for (MapConfig.SpawnPoint sp : mc.spawnPoints) if (sp.group() != null && !out.contains(sp.group())) out.add(sp.group());
+                out.add("locked");
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamspawn")) {
                 out.add("locked");
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && (a[1].equalsIgnoreCase("objective") || a[1].equalsIgnoreCase("trigger"))) {
+                MapConfig mc = plugin.registry().map(a[2]);
+                if (mc != null && a[1].equalsIgnoreCase("objective")) mc.objectives.forEach(o -> out.add(o.id()));
+                if (mc != null && a[1].equalsIgnoreCase("trigger")) mc.triggers.forEach(t -> out.add(t.name()));
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective")) {
                 out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {
@@ -1615,10 +1836,17 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("fortress") && (a[3].equalsIgnoreCase("tp") || a[3].equalsIgnoreCase("del"))) {
                 MapConfig mc = plugin.registry().map(a[2]);
                 if (mc != null) for (int i = 1; i <= mc.fortress.size(); i++) out.add(String.valueOf(i));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("center")) {
+                out.addAll(List.of("auto", "100", "200", "300"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("show")) {
+                out.addAll(List.of("30", "60", "120", "0"));
+            } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("seekerspawn")) {
+                out.add("none");
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("zone")) {
                 out.add("clear");
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamzone")) {
-                out.addAll(List.of("attackers", "defenders", "seeker", "hider", "open"));
+                out.addAll(teamsOf(plugin.registry().map(a[2])));
+                out.add("open");
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("teamzone")) {
                 out.addAll(a[3].equalsIgnoreCase("open") ? List.of("30", "60", "120", "0") : List.of("clear"));
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("wall")) {
