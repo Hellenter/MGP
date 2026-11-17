@@ -178,6 +178,10 @@ public final class HideAndSeekLogic extends GameLogic {
 
     private boolean isSeeker(Player p) { return roles.get(p.getUniqueId()) == Role.SEEKER; }
 
+    /** В прятках выбрасывать нечего: нож ищущего и предметы режима остаются у игрока. */
+    @Override
+    public void onDrop(org.bukkit.event.player.PlayerDropItemEvent e) { e.setCancelled(true); }
+
     @Override
     public String zoneTeam(Player p) {
         Role r = roles.get(p.getUniqueId());

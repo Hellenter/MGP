@@ -226,7 +226,9 @@ public final class GameListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent e) {
         GameSession s = of(e.getPlayer());
-        if (s != null && !active(s, e.getPlayer())) e.setCancelled(true);
+        if (s == null) return;
+        if (!active(s, e.getPlayer())) e.setCancelled(true);
+        else s.logic().onDrop(e);
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
