@@ -68,6 +68,10 @@ public final class GunService implements Listener {
     private final PackService pack;
     private Material base = Material.STICK;
     private int triggerHold = 5;
+    /** Стрельба на ЛКМ (true) или на ПКМ, как раньше (settings.fire-button: left|right). */
+    private boolean fireLeft = true;
+    /** ЛКМ: сколько тиков после клика идёт очередь (клиент не сообщает, что ЛКМ держат в воздухе). */
+    private int clickHold = 6;
     /** С какого расстояния от стрелка начинается след пули (чтобы не закрывал прицел). */
     private double tracerStart = 10;
     private boolean onlyInGames = true, tracer = true, breakGlass = false, hud = true;
@@ -89,6 +93,9 @@ public final class GunService implements Listener {
     /** Курок и перезарядка игрока. */
     private static final class Shooter {
         long lastTrigger = -100;
+        /** До какого тика продолжается очередь. */
+        long holdUntil = -100;
+        long lastUse = -100;
         double nextShot;
         int burstLeft;
         UUID reloadGun;
@@ -127,6 +134,8 @@ public final class GunService implements Listener {
         if (s != null) {
             base = Cfg.material(s.getString("base-item", "STICK"), Material.STICK);
             triggerHold = Math.max(4, s.getInt("trigger-hold", 5));
+            fireLeft = !s.getString("fire-button", "left").trim().equalsIgnoreCase("right");
+            clickHold = Math.max(1, s.getInt("click-hold", 6));
             onlyInGames = s.getBoolean("only-in-games", true);
             tracer = s.getBoolean("tracer", true);
             tracerStart = Math.max(1.2, s.getDouble("tracer-start", 10));
@@ -170,7 +179,8 @@ public final class GunService implements Listener {
         for (GunSpec.FireMode fm : g.modes()) modes.append(modes.isEmpty() ? "" : "<dark_gray>, ").append(g.label(fm));
         lore.add("<gray>Режимы: " + modes);
         lore.add("");
-        lore.add("<dark_gray>ПКМ — огонь" + (g.modes().size() > 1 ? ", F — режим" : "") + ", Q — перезарядка");
+        lore.add("<dark_gray>" + (fireLeft ? "ЛКМ" : "ПКМ") + " — огонь" + (g.modes().size() > 1 ? ", F — режим" : "")
+                + (fireLeft ? ", ПКМ или Q — перезарядка" : ", Q — перезарядка"));
         if (g.zoom() > 0) lore.add("<dark_gray>Присед — прицел");
         m.lore(lore.stream().map(Msg::item).toList());
         m.setMaxStackSize(1);
@@ -330,8 +340,16 @@ public final class GunService implements Listener {
     @EventHandler(priority = EventPriority.LOW)
     public void onInteract(PlayerInteractEvent e) {
         Action a = e.getAction();
-        if (a != Action.RIGHT_CLICK_AIR && a != Action.RIGHT_CLICK_BLOCK) return;
         Player p = e.getPlayer();
+        if (a == Action.LEFT_CLICK_AIR || a == Action.LEFT_CLICK_BLOCK) {
+            ItemStack it = p.getInventory().getItemInMainHand();
+            GunSpec g = spec(it);
+            if (g == null) return;
+            if (a == Action.LEFT_CLICK_BLOCK) e.setCancelled(true); // оружием блоки не ломаются
+            if (fireLeft) trigger(p, it, g, clickHold);
+            return;
+        }
+        if (a != Action.RIGHT_CLICK_AIR && a != Action.RIGHT_CLICK_BLOCK) return;
         ItemStack it = p.getInventory().getItemInMainHand();
         GunSpec g = spec(it);
         if (g == null) {
@@ -345,10 +363,56 @@ public final class GunService implements Listener {
                 && !p.isSneaking()) return;
         e.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         if (e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        if (fireLeft) {
+            // ПКМ — перезарядка (клиент повторяет ПКМ, пока его держат: считаем только новое нажатие)
+            Shooter sh = shooter(p);
+            boolean pressed = now - sh.lastUse > triggerHold;
+            sh.lastUse = now;
+            if (pressed) startReload(p, true);
+            return;
+        }
+        trigger(p, it, g, triggerHold);
+    }
+
+    /** ЛКМ с оружием по мобу или игроку — выстрел вместо удара. */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onMelee(org.bukkit.event.entity.EntityDamageByEntityEvent e) {
+        if (!(e.getDamager() instanceof Player p) || e.getCause() != org.bukkit.event.entity.EntityDamageEvent.DamageCause.ENTITY_ATTACK) return;
+        if (current != null) return; // урон от нашей же пули
+        ItemStack it = p.getInventory().getItemInMainHand();
+        GunSpec g = spec(it);
+        if (g == null) return;
+        e.setCancelled(true);
+        if (fireLeft) trigger(p, it, g, clickHold);
+    }
+
+    /** Пока ЛКМ держат на блоке, клиент «копает» и машет рукой каждый тик — очередь продолжается. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onSwing(io.papermc.paper.event.player.PlayerArmSwingEvent e) {
+        if (!fireLeft || e.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        Shooter sh = shooters.get(e.getPlayer().getUniqueId());
+        if (sh == null || sh.holdUntil < now - 1 || sh.lastTrigger == now) return;
+        if (spec(e.getPlayer().getInventory().getItemInMainHand()) == null) return;
+        sh.holdUntil = Math.max(sh.holdUntil, now + 2);
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onBlockDamage(org.bukkit.event.block.BlockDamageEvent e) {
+        if (spec(e.getItemInHand()) != null) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onBlockBreak(org.bukkit.event.block.BlockBreakEvent e) {
+        if (spec(e.getPlayer().getInventory().getItemInMainHand()) != null) e.setCancelled(true);
+    }
+
+    /** Нажатие спуска: hold — сколько тиков очередь продолжается без повторного сигнала. */
+    private void trigger(Player p, ItemStack it, GunSpec g, int hold) {
         Shooter sh = shooter(p);
-        if (sh.lastTrigger == now) return; // ПКМ по блоку и в воздух приходят в одном тике
-        boolean pressed = now - sh.lastTrigger > triggerHold; // новое нажатие, а не удержание
+        if (sh.lastTrigger == now) return; // клик по блоку и в воздух приходят в одном тике
+        boolean pressed = now > sh.holdUntil; // новое нажатие, а не удержание
         sh.lastTrigger = now;
+        sh.holdUntil = now + hold;
         if (!canShoot(p)) return;
         UUID u = uid(it, true);
         GunState st = state(u, p.getInventory().getItemInMainHand(), g);
@@ -479,7 +543,7 @@ public final class GunService implements Listener {
                         if (!fire(p, g, u, st, sh)) break;
                         if (sh.burstLeft == 0) sh.nextShot += g.interval() * 2; // пауза после отсечки
                     }
-                } else if (g.modes().get(st.mode) == GunSpec.FireMode.AUTO && now - sh.lastTrigger <= triggerHold) {
+                } else if (g.modes().get(st.mode) == GunSpec.FireMode.AUTO && now <= sh.holdUntil) {
                     int guard = 0;
                     while (sh.nextShot <= now && guard++ < 10) if (!fire(p, g, u, st, sh)) break;
                 }
@@ -507,7 +571,7 @@ public final class GunService implements Listener {
             String mag = st.mag == 0 ? "<red>0" : st.mag <= Math.max(1, g.magazine() / 4) ? "<gold>" + st.mag : "<white>" + st.mag;
             line = g.name() + " <dark_gray>| " + g.label(g.modes().get(st.mode)) + " <dark_gray>| " + mag + "<gray>/" + g.magazine()
                     + " <dark_gray>[" + (g.infiniteAmmo() ? "∞" : reserve) + "]";
-            if (st.mag == 0) line += reserve > 0 ? " <yellow>Q — перезарядка" : " <red>нет патронов";
+            if (st.mag == 0) line += reserve > 0 ?  (fireLeft ? " <yellow>ПКМ — перезарядка" : " <yellow>Q — перезарядка") : " <red>нет патронов";
         }
         if (line.equals(sh.lastHud) && now % 30 != 0) return;
         sh.lastHud = line;
