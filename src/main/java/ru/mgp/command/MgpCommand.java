@@ -48,8 +48,14 @@ public final class MgpCommand implements TabExecutor {
     /** /mgp gun give <оружие> [игрок] | ammo <тип> [кол-во] [игрок] | list */
     private void gun(CommandSender sender, String[] a) {
         var g = plugin.guns();
-        String sub = a.length > 1 ? a[1].toLowerCase(Locale.ROOT) : "list";
+        String sub = a.length > 1 ? a[1].toLowerCase(Locale.ROOT) : sender instanceof Player ? "menu" : "list";
         switch (sub) {
+            case "menu" -> {
+                if (!(sender instanceof Player p)) { Msg.send(sender, "<red>Меню — только в игре. <gray>/mgp gun give|ammo|list"); return; }
+                Player to = a.length > 2 ? Bukkit.getPlayerExact(a[2]) : p;
+                if (to == null) { Msg.send(sender, "<red>Игрок не найден."); return; }
+                new ru.mgp.gun.GunMenu(g, to).open(p);
+            }
             case "give" -> {
                 if (a.length < 3) { Msg.send(sender, "<gray>/mgp gun give <оружие> [игрок]"); return; }
                 Player to = a.length > 3 ? Bukkit.getPlayerExact(a[3]) : sender instanceof Player p ? p : null;
@@ -77,9 +83,28 @@ public final class MgpCommand implements TabExecutor {
                 for (var gs : g.guns().values())
                     Msg.send(sender, "<yellow>" + gs.id() + " <gray>— " + gs.name() + " <dark_gray>(патроны: " + gs.ammo() + ", магазин " + gs.magazine() + ")");
                 Msg.send(sender, "<gold>Патроны: <yellow>" + String.join(", ", g.ammoTypes()) + ", " + ru.mgp.gun.GunSpec.AMMO_EXPLOSIVE);
-                Msg.send(sender, "<gray>/mgp gun give <оружие> [игрок] · /mgp gun ammo <тип> [кол-во] [игрок]");
+                Msg.send(sender, "<gray>/mgp gun [menu [игрок]] · /mgp gun give <оружие> [игрок] · /mgp gun ammo <тип> [кол-во] [игрок] · /mgp pack load|unload [игрок]");
             }
         }
+    }
+
+    /** /mgp pack load|unload [игрок] — ресурспак оружия вручную, чтобы проверить модели вне режима. */
+    private void pack(CommandSender sender, String[] a) {
+        var pack = plugin.guns().pack();
+        String sub = a.length > 1 ? a[1].toLowerCase(Locale.ROOT) : "";
+        Player to = a.length > 2 ? Bukkit.getPlayerExact(a[2]) : sender instanceof Player p ? p : null;
+        if (!sub.equals("load") && !sub.equals("unload")) {
+            Msg.send(sender, "<gray>/mgp pack load [игрок] <dark_gray>— <gray>загрузить ресурспак оружия; /mgp pack unload [игрок] <dark_gray>— <gray>снять");
+            if (to != null) Msg.send(sender, "<gray>" + Msg.esc(to.getName()) + ": вручную " + (pack.manual(to) ? "<green>да" : "<red>нет")
+                    + "<gray>, загружен " + (pack.loaded(to) ? "<green>да" : "<red>нет"));
+            return;
+        }
+        if (to == null) { Msg.send(sender, "<red>Игрок не найден."); return; }
+        if (sub.equals("load")) {
+            if (pack.loadManual(to)) Msg.send(sender, "<green>Отправляю ресурспак " + Msg.esc(to.getName()) + " (" + pack.packCount() + " шт.). Снять: /mgp pack unload");
+            else Msg.send(sender, "<red>В guns.yml не задан ни один ресурспак.");
+        } else if (pack.unloadManual(to)) Msg.send(sender, "<gray>Ресурспак снят у " + Msg.esc(to.getName()) + ".");
+        else Msg.send(sender, "<gray>" + Msg.esc(to.getName()) + " в режиме с паком — пак снимется при выходе в хаб.");
     }
 
     public void shutdown() { display.removeAll(); }
@@ -166,6 +191,7 @@ public final class MgpCommand implements TabExecutor {
                         + "<gray>. Взрываются только в режимах с settings.explosive-arrows.enabled: true");
             }
             case "gun", "guns" -> { if (admin(sender)) gun(sender, a); }
+            case "pack" -> { if (admin(sender)) pack(sender, a); }
             case "npc", "npcs" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -1462,7 +1488,7 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "debug"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("start", "list", "reload", "setup", "panel", "import", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("debug") && s.hasPermission("mgp.admin")) {
                 out.add("solo");
                 out.addAll(plugin.registry().modes().stream().map(m -> m.id).toList());
@@ -1470,11 +1496,16 @@ public final class MgpCommand implements TabExecutor {
                 out.addAll(List.of("on", "off"));
             } else if (a.length >= 2 && a[0].equalsIgnoreCase("gun") && s.hasPermission("mgp.admin")) {
                 var g = plugin.guns();
-                if (a.length == 2) out.addAll(List.of("give", "ammo", "list"));
+                if (a.length == 2) out.addAll(List.of("menu", "give", "ammo", "list"));
+                else if (a.length == 3 && a[1].equalsIgnoreCase("menu")) for (Player op : Bukkit.getOnlinePlayers()) out.add(op.getName());
                 else if (a.length == 3 && a[1].equalsIgnoreCase("give")) out.addAll(g.guns().keySet());
                 else if (a.length == 3 && a[1].equalsIgnoreCase("ammo")) { out.addAll(g.ammoTypes()); out.add(ru.mgp.gun.GunSpec.AMMO_EXPLOSIVE); }
                 else if ((a.length == 4 && a[1].equalsIgnoreCase("give")) || (a.length == 5 && a[1].equalsIgnoreCase("ammo")))
                     for (Player op : Bukkit.getOnlinePlayers()) out.add(op.getName());
+            } else if (a.length == 2 && a[0].equalsIgnoreCase("pack") && s.hasPermission("mgp.admin")) {
+                out.addAll(List.of("load", "unload"));
+            } else if (a.length == 3 && a[0].equalsIgnoreCase("pack") && s.hasPermission("mgp.admin")) {
+                for (Player op : Bukkit.getOnlinePlayers()) out.add(op.getName());
             } else if (a.length >= 2 && a[0].equalsIgnoreCase("npc")) {
                 out.addAll(ru.mgp.npc.NpcCommands.complete(plugin, a));
             } else if (a.length == 2 && a[0].equalsIgnoreCase("hotbar")) {
