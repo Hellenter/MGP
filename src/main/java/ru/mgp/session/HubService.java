@@ -29,6 +29,10 @@ public final class HubService {
     public void send(Player p) {
         GameMode gm = Cfg.enumValue(GameMode.class, plugin.getConfig().getString("hub.gamemode"), GameMode.ADVENTURE);
         PlayerUtil.reset(p, gm);
+        // шкалы режимов (крепость в осаде, цели, скрипты) в хабе не нужны — даже если режим не успел их убрать
+        java.util.List<net.kyori.adventure.bossbar.BossBar> bars = new java.util.ArrayList<>();
+        p.activeBossBars().forEach(bars::add);
+        bars.forEach(p::hideBossBar);
         p.teleport(location());
         Hotbar.giveHub(p);
         plugin.visibility().refresh(p);
