@@ -56,7 +56,8 @@ public final class AssaultLogic extends GameLogic {
     private record Stage(String name, int time, List<String> objectives, int require, String spawnGroup, List<String> actions,
                          Map<String, List<Region>> zones) {}
 
-    private static Map<String, List<Region>> zones(Object raw) {
+    /** Зоны одной стадии из yml (stages[i].zones): команда -> области. */
+    public static Map<String, List<Region>> zones(Object raw) {
         Map<String, List<Region>> out = new HashMap<>();
         Map<String, Object> m = Cfg.asMap(raw);
         if (m == null) return out;
