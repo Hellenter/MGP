@@ -118,6 +118,12 @@ final class NpcMenu extends Menu {
             else return;
             done(p);
         });
+        set(28, Items.icon(Material.EMERALD, "<green><bold>Магазин", List.of("<gray>Клик по NPC открывает магазин (/mgp shop)",
+                "<gray>team — магазин команды игрока в штурме"), false), p -> {
+            List<String> ids = new ArrayList<>();
+            svc.plugin().shops().all().forEach(sh -> ids.add(sh.id));
+            svc.ask(p, "<aqua>id магазина: <white>" + String.join(", ", ids) + "<aqua> или <white>team", t -> add(p, "shop: " + t.trim()));
+        });
         set(29, Items.icon(Material.DIAMOND_SWORD, "<green><bold>В режим", List.of("<gray>Клик по NPC ставит в очередь режима", "<gray>(с пати, как через меню игр)"), false),
                 p -> new ModePick(this, p).open(p));
         set(30, Items.icon(Material.COMPASS, "<green><bold>Открыть меню игр", List.of(), false), p -> add(p, "menu"));

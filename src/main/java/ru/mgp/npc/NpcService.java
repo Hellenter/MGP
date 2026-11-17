@@ -121,7 +121,7 @@ public final class NpcService implements Listener {
                 "NPC: /mgp npc create <id> [карта], настройка — Shift+ПКМ по NPC или /mgp npc edit <id>.",
                 "type: MANNEQUIN (человек со скином игрока skin: <ник>) или любая живая сущность: VILLAGER, ZOMBIE...",
                 "lines: подпись над головой; {players:<режим>} — сколько играют, {online} — онлайн сервера.",
-                "actions: join: <режим> | menu | server: <id> | leave | player-command: <команда> | wait: <сек>",
+                "actions: join: <режим> | menu | server: <id> | leave | shop: <магазин|team> | player-command: <команда> | wait: <сек>",
                 "  и любые действия скриптов (message:, title:, sound:, command:, teleport:...). NPC карты (map:) работают в игре."));
         for (Npc n : npcs.values()) {
             String p = "npcs." + n.id + ".";
@@ -447,6 +447,7 @@ public final class NpcService implements Listener {
                     case "server" -> plugin.servers().transfer(p, arg);
                     case "leave", "hub" -> plugin.sessions().leave(p);
                     case "player-command" -> p.performCommand(stripSlash(arg).replace("{player}", p.getName()));
+                    case "shop" -> openShop(p, s, arg);
                     default -> {
                         if (s != null) ActionRunner.run(s, List.of(raw), p);
                         else hubAction(p, type, arg, raw);
@@ -456,6 +457,18 @@ public final class NpcService implements Listener {
                 plugin.getLogger().warning("NPC: ошибка в действии '" + raw + "': " + ex.getMessage());
             }
         }
+    }
+
+    /** shop: <id> — витрина магазина; shop: team — магазин команды игрока в штурме (settings.shop режима). */
+    private void openShop(Player p, GameSession s, String id) {
+        if (id.isBlank() || id.equalsIgnoreCase("team")) {
+            if (s != null && s.isPlaying()) ActionRunner.run(s, List.of("mode: shop"), p);
+            else Msg.send(p, "<red>shop: team работает только в игре со своими магазинами команд (Штурм)");
+            return;
+        }
+        ru.mgp.shop.Shop shop = plugin.shops().get(id);
+        if (shop == null) { Msg.send(p, "<red>Магазин " + Msg.esc(id) + " не найден. /mgp shop — список"); return; }
+        new ru.mgp.shop.ShopMenu(plugin.shops(), shop, 0).open(p);
     }
 
     private static String stripSlash(String s) { return s.startsWith("/") ? s.substring(1) : s; }
