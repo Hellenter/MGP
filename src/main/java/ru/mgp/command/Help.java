@@ -48,6 +48,7 @@ final class Help {
                 l("/mgp setup biome <биом|none>", "биом на всю карту"),
                 l("/mgp maps", "карты по режимам (красные — не готовы)"),
                 l("/mgp rename <новый id> [название]", "переименовать карту; /mgp optimize — обрезать пустые края"),
+                l("/mgp delete <карта>", "удалить карту и её шаблон (спросит подтверждение)"),
                 l("/mgp setup lobby <режим|default>", "лобби ожидания из выделения, спавн — где стоишь"));
         section("sel", "Выделение и зоны",
                 l("/mgp setup wand", "золотой топор: ЛКМ по блоку — pos1, ПКМ — pos2 (или /mgp setup pos1 / pos2)"),
@@ -180,7 +181,7 @@ final class Help {
 
     // ------------------------------------------------------------------ опечатки
 
-    static final List<String> SETUP_SUBS = List.of("menu", "check", "help", "export", "create", "spawn", "delspawn", "spawns", "clearspawns",
+    static final List<String> SETUP_SUBS = List.of("menu", "check", "help", "delete", "export", "create", "spawn", "delspawn", "spawns", "clearspawns",
             "spectator", "seekerspawn", "alsomode", "center", "chest", "wand", "trader", "modes", "maps", "teamspawn", "objective", "objectives",
             "fortress", "pos1", "pos2", "clearsel", "expand", "contract", "shift", "outset", "inset", "face", "box", "size", "sel", "optimize",
             "rename", "name", "biome", "plot", "plots", "delplot", "tpplot", "tpspawn", "wall", "arena", "show", "zone", "teamzone", "trigger",
@@ -188,7 +189,7 @@ final class Help {
 
     static List<String> topLevel(CommandSender s) {
         List<String> l = new ArrayList<>(List.of("join", "leave", "menu", "help"));
-        if (s.hasPermission("mgp.admin")) l.addAll(List.of("map", "maps", "check", "setup", "tools", "import", "start", "list", "reload", "panel",
+        if (s.hasPermission("mgp.admin")) l.addAll(List.of("map", "maps", "check", "delete", "setup", "tools", "import", "start", "list", "reload", "panel",
                 "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
         return l;
     }
