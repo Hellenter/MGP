@@ -36,7 +36,7 @@ public final class PlayZone {
 
     public boolean active() {
         MapConfig m = map();
-        return m != null && (!m.playZone.isEmpty() || (!teamOpen && !m.teamZones.isEmpty()));
+        return m != null && (!m.playZone.isEmpty() || (!teamOpen && !m.teamZones.isEmpty()) || s.logic().customZones());
     }
 
     void start() {
@@ -81,6 +81,8 @@ public final class PlayZone {
             List<Region> tz = team == null ? null : m.teamZones.get(team.toLowerCase(Locale.ROOT));
             if (tz != null && !inAny(tz, l)) return false;
         }
+        List<Region> sz = s.logic().stageZone(p);
+        if (sz != null && !inAny(sz, l)) return false;
         return true;
     }
 
@@ -100,6 +102,8 @@ public final class PlayZone {
             List<Region> tz = team == null ? null : m.teamZones.get(team.toLowerCase(Locale.ROOT));
             if (tz != null) d = Math.max(d, nearest(tz, l));
         }
+        List<Region> sz = s.logic().stageZone(p);
+        if (sz != null) d = Math.max(d, nearest(sz, l));
         return d;
     }
 
@@ -164,6 +168,8 @@ public final class PlayZone {
             List<Region> tz = tn == null ? null : m.teamZones.get(tn.toLowerCase(Locale.ROOT));
             if (tz != null) { boxes.addAll(tz); team = true; }
         }
+        List<Region> sz = s.logic().stageZone(p);
+        if (sz != null) { boxes.addAll(sz); team = true; }
         double x = at.getX(), y = at.getY() + 1, z = at.getZ();
         for (Region r : boxes) {
             int mg = margin();

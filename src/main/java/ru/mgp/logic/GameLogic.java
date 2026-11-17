@@ -54,6 +54,12 @@ public abstract class GameLogic {
     /** Взрыв в мире игры (ТНТ, крипер...). */
     public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {}
 
+    /** Есть ли у режима свои зоны по ходу игры (stageZone), например зоны стадий штурма. */
+    public boolean customZones() { return false; }
+
+    /** Где сейчас может быть игрок сверх play-зоны (например, зона его команды на текущей стадии); null — без ограничения. */
+    public java.util.List<ru.mgp.util.Region> stageZone(Player p) { return null; }
+
     /** Не держать игрока в play-зоне и зоне команды (например, он в лимбо штурма). */
     public boolean zoneFree(Player p) { return false; }
 
