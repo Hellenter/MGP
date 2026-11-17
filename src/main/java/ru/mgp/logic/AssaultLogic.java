@@ -787,9 +787,14 @@ public final class AssaultLogic extends GameLogic {
         if (t == null || ended || stages.isEmpty()) return null;
         int cur = Math.max(0, Math.min(stageIdx, stages.size() - 1));
         boolean cumulative = !"replace".equalsIgnoreCase(session.mode.settings.getString("stage-zones", "cumulative"));
+        boolean any = false;
+        for (Stage st : stages) if (st.zones().containsKey(t.id)) { any = true; break; }
+        if (!any) return null; // у команды нет зон стадий — только play-зона и стартовая зона (teamzone)
         List<Region> out = new ArrayList<>();
         for (int i = cur; i >= 0; i--) {
             List<Region> z = stages.get(i).zones().get(t.id);
+            // у стадии 1 своей зоны нет — её зона это стартовая зона команды (/mgp setup teamzone)
+            if (z == null && i == 0) z = session.map().teamZones.get(t.id);
             if (z == null) continue;
             out.addAll(z);
             if (!cumulative) break;
