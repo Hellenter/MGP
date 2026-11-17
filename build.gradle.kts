@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "ru.mgp"
-version = "0.12.5"
+version = "0.12.6"
 
 repositories {
     mavenCentral()

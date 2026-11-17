@@ -49,6 +49,8 @@ public abstract class GameLogic {
     public void onCreatureSpawn(CreatureSpawnEvent e) {}
     public void onMove(PlayerMoveEvent e) {}
     public void onInteract(PlayerInteractEvent e) {}
+    /** Игрок выбрасывает предмет (Q или из инвентаря). */
+    public void onDrop(org.bukkit.event.player.PlayerDropItemEvent e) {}
     /** Взрыв в мире игры (ТНТ, крипер...). */
     public void onExplode(org.bukkit.event.entity.EntityExplodeEvent e) {}
 
