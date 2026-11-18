@@ -5,6 +5,8 @@ set -e
 cd "$(dirname "$0")"
 OUT=assets/minecraft/textures/item
 [ -n "$1" ] && python3 src/recolor.py "$1" "$OUT"
+# колючая проволока вместо паутины (рисуется без ванильного jar)
+python3 src/barbed_wire.py assets/minecraft/textures/block
 rm -f ../assault-tools.zip
 # фиксированные даты, чтобы SHA-1 не менялся от пересборки
 find pack.mcmeta assets -exec touch -t 202601010000 {} +
