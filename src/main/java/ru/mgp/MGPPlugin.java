@@ -68,6 +68,8 @@ public final class MGPPlugin extends JavaPlugin {
         pm.registerEvents(new PlayerListener(this), this);
         pm.registerEvents(new GameListener(this), this);
         pm.registerEvents(new ru.mgp.session.ExplosiveArrows(this), this);
+        spawnProtection = new ru.mgp.session.SpawnProtection(this);
+        pm.registerEvents(spawnProtection, this);
         pm.registerEvents(guns, this);
         wand = new ru.mgp.editor.ScriptWand(this);
         pm.registerEvents(wand, this);
@@ -176,4 +178,7 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.bot.BotService bots;
     public ru.mgp.bot.BotService bots() { return bots; }
+
+    private ru.mgp.session.SpawnProtection spawnProtection;
+    public ru.mgp.session.SpawnProtection spawnProtection() { return spawnProtection; }
 }

@@ -80,7 +80,7 @@ public final class AssaultLogic extends GameLogic {
 
     // настройки
     private final double defenderRatio;
-    private final int prepTime, stageTimeDefault, respawnDelay, limboTimeout, spawnProtection;
+    private final int prepTime, stageTimeDefault, respawnDelay, limboTimeout;
     private final boolean keepInventory, dropItems, hideEnemyNames, enemyNameOnAim, autoTnt, defenderTnt, objectiveHandBreak, defendersRepair;
     private final String redeploy;
     private final int tntFuse;
@@ -100,7 +100,6 @@ public final class AssaultLogic extends GameLogic {
     /** Игроки в лимбо → секунда игры, с которой можно выйти. */
     private final Map<UUID, Integer> inLimbo = new HashMap<>();
     /** Защита после выхода на поле: до какой секунды игры. */
-    private final Map<UUID, Integer> protectedUntil = new HashMap<>();
     /** Кто ломал цель: id цели → игроки (награда за разрушение). */
     private final Map<String, Set<UUID>> contributors = new HashMap<>();
     private final Set<Long> placed = new HashSet<>();
@@ -117,7 +116,6 @@ public final class AssaultLogic extends GameLogic {
         stageTimeDefault = t > 0 ? t : 900;
         respawnDelay = Math.max(0, Cfg.seconds(st.get("respawn-delay"), 5));
         limboTimeout = Math.max(0, Cfg.seconds(st.get("limbo-timeout"), 0));
-        spawnProtection = Math.max(0, Cfg.seconds(st.get("spawn-protection"), 3));
         keepInventory = st.getBoolean("keep-inventory", false);
         dropItems = st.getBoolean("drop-items", false);
         hideEnemyNames = st.getBoolean("hide-enemy-nametags", true);
@@ -294,7 +292,7 @@ public final class AssaultLogic extends GameLogic {
         Location l = limbo.get(t);
         if (l == null) {
             if (teleport) p.teleport(activeSpawn(t));
-            protectedUntil.put(p.getUniqueId(), session.elapsed() + spawnProtection);
+            session.protectSpawn(p);
             return;
         }
         if (teleport) p.teleport(l);
@@ -337,7 +335,7 @@ public final class AssaultLogic extends GameLogic {
         p.teleport(to);
         p.setFallDistance(0);
         p.setFireTicks(0);
-        protectedUntil.put(p.getUniqueId(), session.elapsed() + spawnProtection);
+        session.protectSpawn(p);
         Msg.title(p, t.color + "<bold>В БОЙ!", stage() == null ? "<gray>Бой начнётся после подготовки" : stage().name());
         p.playSound(to, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8f, 1.2f);
     }
@@ -455,7 +453,7 @@ public final class AssaultLogic extends GameLogic {
                 if (t == null || inLimbo.containsKey(p.getUniqueId())) continue;
                 if (redeploy.equals("all") || redeploy.equals(t.id)) {
                     p.teleport(activeSpawn(t));
-                    protectedUntil.put(p.getUniqueId(), session.elapsed() + spawnProtection);
+                    session.protectSpawn(p);
                 }
             }
         }
@@ -623,8 +621,6 @@ public final class AssaultLogic extends GameLogic {
         Player a = damager(e);
         if (a != null && !a.equals(victim)) {
             if (inLimbo.containsKey(a.getUniqueId()) || team(a) == team(victim) || inPrep()) { e.setCancelled(true); return; }
-            if (protectedUntil.getOrDefault(v, -1) >= session.elapsed()) { e.setCancelled(true); return; }
-            protectedUntil.remove(a.getUniqueId()); // напал сам — защита спавна снимается
         }
         if (a != null && a.equals(victim) && e.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) e.setDamage(e.getDamage() * 0.3);
     }
@@ -653,7 +649,6 @@ public final class AssaultLogic extends GameLogic {
         } else if (!dropItems) e.getDrops().clear();
         else e.getDrops().removeIf(it -> Keys.tag(it) != null);
         e.setDroppedExp(0);
-        protectedUntil.remove(p.getUniqueId());
         inLimbo.remove(p.getUniqueId());
     }
 
@@ -679,7 +674,6 @@ public final class AssaultLogic extends GameLogic {
     @Override
     public void onLeave(Player p, boolean wasAlive) {
         inLimbo.remove(p.getUniqueId());
-        protectedUntil.remove(p.getUniqueId());
         BossBar bar = bars.remove(p.getUniqueId());
         if (bar != null) p.hideBossBar(bar);
         if (!wasAlive || ended || !session.isPlaying()) return;
@@ -748,7 +742,6 @@ public final class AssaultLogic extends GameLogic {
             p.sendActionBar(Msg.parse("<gold>" + Shop.moneyName(money.getOrDefault(p.getUniqueId(), 0)) + " <dark_gray>| "
                     + (left > 0 ? "<gray>выход через <yellow>" + left + " <gray>с" : "<green>можно в бой — " + (hasExit ? "иди к выходу" : "кнопка «В бой»"))));
         }
-        protectedUntil.values().removeIf(u -> u < now);
         Stage st = stage();
         int left = st == null ? prepTime - now : stageStartAt + st.time() - now;
         if (st != null && left <= 0) {

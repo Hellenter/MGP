@@ -509,6 +509,7 @@ public final class SiegeLogic extends GameLogic {
         p.setFoodLevel(20);
         p.setFireTicks(0);
         if (!attackerKeepInventory) equip(p);
+        session.protectSpawn(p);
         Msg.title(p, "<red><bold>В БОЙ!", "");
     }
 
