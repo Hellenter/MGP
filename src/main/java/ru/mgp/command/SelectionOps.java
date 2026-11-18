@@ -35,6 +35,8 @@ final class SelectionOps {
     private final Map<UUID, Pos> pos1, pos2;
     private final Map<UUID, String> world;
     private final Runnable1 redraw;
+    /** «Зона-триггер из выделения» в меню граней (подключает MgpCommand); null — кнопки нет. */
+    Runnable1 makeTrigger;
 
     interface Runnable1 { void run(Player p); }
 

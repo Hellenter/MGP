@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 import ru.mgp.ui.Menu;
 import ru.mgp.util.Items;
 import ru.mgp.util.Msg;
+import ru.mgp.util.Region;
 
 import java.util.*;
 
@@ -19,7 +20,7 @@ final class ScriptTypeMenu extends Menu {
                 : name.endsWith("PRESSURE_PLATE") ? "plate" : "hold";
         String where = "<gray>Блок: <white>" + pretty(b.getType()) + " <dark_gray>" + b.getX() + " " + b.getY() + " " + b.getZ();
         set(4, Items.icon(b.getType().isItem() ? b.getType() : Material.STRUCTURE_VOID, "<yellow>Выделенный блок", List.of(where), false), null);
-        option(wand, mapId, b, 10, "hold", Material.ENDER_EYE, "<aqua><bold>Удержание Shift", suggested, List.of(
+        option(wand, mapId, b, 11, "hold", Material.ENDER_EYE, "<aqua><bold>Удержание Shift", suggested, List.of(
                 "<gray>Игрок подходит к блоку и держит Shift",
                 "<gray>N секунд. Над хотбаром подсказка,",
                 "<gray>сверху шкала прогресса, вокруг частицы.",
@@ -28,14 +29,33 @@ final class ScriptTypeMenu extends Menu {
                 "<gray>Срабатывает, когда игрок нажимает",
                 "<gray>на блок правой кнопкой.",
                 "<dark_gray>Кнопка, рычаг, табличка, любой блок"));
-        option(wand, mapId, b, 14, "plate", Material.STONE_PRESSURE_PLATE, "<green><bold>Наступить", suggested, List.of(
+        option(wand, mapId, b, 13, "plate", Material.STONE_PRESSURE_PLATE, "<green><bold>Наступить", suggested, List.of(
                 "<gray>Срабатывает, когда игрок",
                 "<gray>наступает на блок.",
                 "<dark_gray>Нажимная плита, ковёр, любой блок"));
-        option(wand, mapId, b, 16, "zone", Material.LIME_STAINED_GLASS, "<light_purple><bold>Зона", suggested, List.of(
+        option(wand, mapId, b, 14, "zone", Material.LIME_STAINED_GLASS, "<light_purple><bold>Зона (радиус)", suggested, List.of(
                 "<gray>Срабатывает, когда игрок входит",
                 "<gray>в радиус вокруг блока.",
                 "<dark_gray>Ловушки, сообщения при входе"));
+        Region sel = wand.selection(p);
+        List<String> areaLore = new ArrayList<>(List.of(
+                "<gray>Срабатывает, когда игрок входит в",
+                "<gray>область-параллелепипед, находится",
+                "<gray>в ней или выходит. Можно требовать",
+                "<gray>несколько игроков внутри сразу.",
+                ""));
+        if (sel != null) areaLore.add("<gray>Область: <white>твоё выделение " + ScriptStore.size(sel));
+        else {
+            areaLore.add("<gray>Область: <white>куб 4×4×4 над этим блоком");
+            areaLore.add("<dark_gray>(или выдели топором /mgp setup wand)");
+        }
+        areaLore.add("");
+        areaLore.add("<green>▶ Выбрать");
+        set(15, Items.icon(Material.PINK_STAINED_GLASS, "<light_purple><bold>Зона-область", areaLore, false), pl -> {
+            Region r = wand.selection(pl);
+            if (r == null) r = new Region(b.getX() - 1, b.getY() + 1, b.getZ() - 1, b.getX() + 2, b.getY() + 4, b.getZ() + 2);
+            wand.createArea(pl, mapId, r, null, null);
+        });
         set(22, Items.icon(Material.BARRIER, "<red>Отмена", List.of(), false), Player::closeInventory);
     }
 

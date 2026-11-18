@@ -34,6 +34,14 @@ public final class MgpCommand implements TabExecutor {
         this.plugin = plugin;
         this.display = new SelectionDisplay(plugin, pos1, pos2, posWorld);
         this.selOps = new SelectionOps(pos1, pos2, posWorld, display::update);
+        if (plugin.wand() != null) {
+            plugin.wand().setSelectionSource(p -> selOps.has(p) ? ru.mgp.util.Region.of(pos1.get(p.getUniqueId()), pos2.get(p.getUniqueId())) : null);
+            selOps.makeTrigger = p -> {
+                MapConfig m = plugin.mapContext().map(p);
+                if (m == null) { Msg.send(p, "<red>Какая карта? <gray>Встань внутри карты или выбери её: /mgp map <карта>"); return; }
+                plugin.wand().createArea(p, m.id, ru.mgp.util.Region.of(pos1.get(p.getUniqueId()), pos2.get(p.getUniqueId())), null, null);
+            };
+        }
         this.selWand = new SelectionWand(plugin, this::setPos);
         plugin.getServer().getPluginManager().registerEvents(selWand, plugin);
         this.tools = new BuilderTools(plugin, this, selWand);
@@ -759,18 +767,19 @@ public final class MgpCommand implements TabExecutor {
                     Msg.send(p, "<gray>Подсветка на " + sec + " сек.: <green>участки</green>, <red>стены</red>, <yellow>спавны участков</yellow>, <white>центр арены</white>, <aqua>play-зона</aqua>, <gold>зоны команд</gold>, <yellow>зоны стадий штурма</yellow> (подписаны), <light_purple>крепость</light_purple>, <gray>цели</gray>; убрать — /mgp setup show " + m.id + " 0");
                 }
                 case "trigger" -> {
-                    need(a, 3);
+                    // /mgp setup trigger <карта> [id] [once|per_player|repeat] — зона-триггер (скрипт area) из выделения + редактор
+                    need(a, 2);
+                    MapConfig mc = plugin.registry().map(a[1]);
+                    if (mc == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
                     Pos[] sel = selection(p);
                     if (sel == null) return;
-                    edit(p, a, 3, y -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("name", a[2]);
-                        m.put("min", sel[0].serialize());
-                        m.put("max", sel[1].serialize());
-                        m.put("mode", a.length > 3 ? a[3].toUpperCase(Locale.ROOT) : "ONCE");
-                        m.put("actions", List.of("message: <yellow>Сработал триггер " + a[2]));
-                        addMap(y, "triggers", m);
-                    }, "Триггер добавлен — впиши действия в файл карты и сделай /mgp reload");
+                    String tid = a.length > 2 ? a[2].toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "") : null;
+                    if (tid != null && tid.isEmpty()) tid = null;
+                    String mode = a.length > 3 ? a[3] : null;
+                    if (mode != null && !List.of("ONCE", "PER_PLAYER", "REPEAT").contains(mode.toUpperCase(Locale.ROOT).replace('-', '_'))) {
+                        Msg.send(p, "<red>Режим: once, per_player или repeat"); return;
+                    }
+                    plugin.wand().createArea(p, mc.id, ru.mgp.util.Region.of(sel[0], sel[1]), tid, mode);
                 }
                 case "lobby" -> setupLobby(p, a);
                 case "script" -> setupScript(p, a);
@@ -778,9 +787,10 @@ public final class MgpCommand implements TabExecutor {
                     need(a, 2);
                     MapConfig m = plugin.registry().map(a[1]);
                     if (m == null) { Msg.send(p, "<red>" + Msg.esc(plugin.registry().mapNotFound(a[1]))); return; }
-                    if (m.scripts.isEmpty()) Msg.send(p, "<gray>На карте нет скриптов. /mgp setup script <карта> <id> hold|button|plate|zone");
+                    if (m.scripts.isEmpty()) Msg.send(p, "<gray>На карте нет скриптов. /mgp setup script <карта> <id> hold|button|plate|zone|area");
                     for (MapConfig.Script sc : m.scripts)
-                        Msg.send(p, "<gold>" + Msg.esc(sc.id()) + "</gold> <gray>" + sc.type().name().toLowerCase(Locale.ROOT) + " у " + sc.block().serialize()
+                        Msg.send(p, "<gold>" + Msg.esc(sc.id()) + "</gold> <gray>" + sc.type().name().toLowerCase(Locale.ROOT)
+                                + (sc.area() != null ? " " + sc.area().min().serialize() + " .. " + sc.area().max().serialize() + " (" + sc.on().name().toLowerCase(Locale.ROOT) + ")" : " у " + sc.block().serialize())
                                 + ", действий: " + sc.actions().size() + (sc.type() == MapConfig.Script.Type.HOLD ? ", держать " + sc.hold() + " с" : ""));
                 }
                 case "waiting" -> {
@@ -1578,12 +1588,13 @@ public final class MgpCommand implements TabExecutor {
         y.set(path, list);
     }
 
-    /** /mgp setup script <карта> <id> <hold|button|plate|zone|tphere|action|set|clear|remove> ... */
+    /** /mgp setup script <карта> <id> <hold|button|plate|zone|area|tphere|action|set|clear|remove> ... */
     private void setupScript(Player p, String[] a) {
         if (a.length < 4) {
             Msg.send(p, "<gold>Скрипты карты</gold> <gray>(вместо командных блоков, хранятся в maps/<карта>.yml → scripts)");
             Msg.send(p, "<yellow>/mgp setup script <карта> <id> hold</yellow> — смотри на блок (например, железный люк): игрок держит Shift рядом с ним");
             Msg.send(p, "<yellow>/mgp setup script <карта> <id> button|plate|zone</yellow> — ПКМ по блоку / наступить / войти в радиус");
+            Msg.send(p, "<yellow>/mgp setup script <карта> <id> area</yellow> — зона-триггер из выделения (топор): войти / быть внутри / выйти");
             Msg.send(p, "<yellow>/mgp setup script <карта> <id> tphere</yellow> — добавить телепорт сюда (где ты стоишь)");
             Msg.send(p, "<yellow>/mgp setup script <карта> <id> action <действие></yellow> — например: action title: <red>Ловушка!");
             Msg.send(p, "<yellow>/mgp setup script <карта> <id> set <ключ> <значение></yellow> — hold, radius, hint, progress, particle, cooldown, mode (once|per_player|repeat), cancel-use");
@@ -1614,6 +1625,18 @@ public final class MgpCommand implements TabExecutor {
                 }, "Скрипт " + id + " (" + op + ") на блоке " + b.getType() + " " + b.getX() + " " + b.getY() + " " + b.getZ()
                         + ". Теперь добавь действия: tphere или action <действие>");
             }
+            case "area" -> {
+                Pos[] sel = selection(p);
+                if (sel == null) return;
+                ru.mgp.util.Region r = ru.mgp.util.Region.of(sel[0], sel[1]);
+                editScript(p, a, id, true, m -> {
+                    m.put("type", "area");
+                    ru.mgp.editor.ScriptStore.putArea(m, r);
+                    m.putIfAbsent("on", "enter");
+                    m.putIfAbsent("actions", new ArrayList<String>());
+                }, "Зона-триггер " + id + " " + ru.mgp.editor.ScriptStore.size(r) + ". Теперь добавь действия: tphere или action <действие>; "
+                        + "когда срабатывать: set on enter|inside|leave, сколько игроков: set players <n>");
+            }
             case "tphere" -> editScript(p, a, id, false, m -> {
                 List<String> acts = actions(m);
                 acts.add("teleport: " + Pos.of(p.getLocation()).serialize());
@@ -1631,13 +1654,14 @@ public final class MgpCommand implements TabExecutor {
                 if (a.length < 6) { Msg.send(p, "<red>/mgp setup script <карта> <id> set <ключ> <значение>"); return; }
                 String k = a[4].toLowerCase(Locale.ROOT);
                 String v = String.join(" ", Arrays.copyOfRange(a, 5, a.length));
-                if (!List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use", "type", "block").contains(k)) {
+                if (!List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use", "type", "block", "on", "players", "min", "max").contains(k)) {
                     Msg.send(p, "<red>Неизвестный ключ " + Msg.esc(k)); return;
                 }
                 editScript(p, a, id, false, m -> {
                     if (v.equalsIgnoreCase("none")) m.remove(k);
                     else if (k.equals("hold") || k.equals("radius")) m.put(k, Double.parseDouble(v.replace(',', '.')));
-                    else if (k.equals("cooldown")) m.put(k, Integer.parseInt(v));
+                    else if (k.equals("cooldown") || k.equals("players")) m.put(k, Integer.parseInt(v));
+                    else if (k.equals("on")) m.put(k, v.toLowerCase(Locale.ROOT));
                     else if (k.equals("cancel-use")) m.put(k, Boolean.parseBoolean(v));
                     else m.put(k, v);
                 }, k + " = " + Msg.esc(v));
@@ -1680,7 +1704,7 @@ public final class MgpCommand implements TabExecutor {
             list.add(m);
         }
         if (target == null) {
-            if (!create) { Msg.send(p, "<red>Нет скрипта " + Msg.esc(id) + ". Создай: /mgp setup script " + a[1] + " " + id + " hold|button|plate|zone"); return; }
+            if (!create) { Msg.send(p, "<red>Нет скрипта " + Msg.esc(id) + ". Создай: /mgp setup script " + a[1] + " " + id + " hold|button|plate|zone|area"); return; }
             target = new LinkedHashMap<>();
             target.put("id", id);
             list.add(target);
@@ -1833,9 +1857,9 @@ public final class MgpCommand implements TabExecutor {
                 MapConfig mc = plugin.registry().map(a[2]);
                 if (mc != null) mc.scripts.forEach(x -> out.add(x.id()));
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script")) {
-                out.addAll(List.of("hold", "button", "plate", "zone", "tphere", "action", "set", "clear", "remove"));
+                out.addAll(List.of("hold", "button", "plate", "zone", "area", "tphere", "action", "set", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("script") && a[4].equalsIgnoreCase("set")) {
-                out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use"));
+                out.addAll(List.of("hold", "radius", "hint", "progress", "particle", "cooldown", "mode", "cancel-use", "on", "players"));
             } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("modes")) {
                 plugin.registry().modes().forEach(m -> out.add(m.id));
             } else if (a.length >= 4 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("assault")) {
@@ -1866,7 +1890,7 @@ public final class MgpCommand implements TabExecutor {
             } else if (a.length == 4 && a[0].equalsIgnoreCase("setup") && (a[1].equalsIgnoreCase("objective") || a[1].equalsIgnoreCase("trigger"))) {
                 MapConfig mc = plugin.registry().map(a[2]);
                 if (mc != null && a[1].equalsIgnoreCase("objective")) mc.objectives.forEach(o -> out.add(o.id()));
-                if (mc != null && a[1].equalsIgnoreCase("trigger")) mc.triggers.forEach(t -> out.add(t.name()));
+                if (mc != null && a[1].equalsIgnoreCase("trigger")) out.add("trap");
             } else if (a.length == 5 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective")) {
                 out.addAll(List.of("50", "75", "100", "action", "clear", "remove"));
             } else if (a.length == 6 && a[0].equalsIgnoreCase("setup") && a[1].equalsIgnoreCase("objective") && a[4].equalsIgnoreCase("action")) {

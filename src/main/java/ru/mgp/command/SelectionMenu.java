@@ -59,6 +59,12 @@ final class SelectionMenu extends Menu {
                 (p, c) -> run(ops, p, c.isRightClick() ? "inset" : "outset", c.isShiftClick() ? "10" : "1", "-h"));
         setClick(42, Items.icon(Material.COMPASS, "<white>Сдвинуть всю рамку", List.of("<gray>туда, куда смотришь", "<green>ЛКМ <gray>на 1, <green>Shift <gray>на 10", "<red>ПКМ <gray>— назад"), false),
                 (p, c) -> run(ops, p, "shift", c.isShiftClick() ? "10" : "1", c.isRightClick() ? "back" : "me"));
+        if (ops.makeTrigger != null)
+            set(8, Items.icon(Material.TRIPWIRE_HOOK, "<light_purple><bold>Сделать зону-триггер", List.of(
+                    "<gray>Из этого выделения: срабатывает,",
+                    "<gray>когда игрок входит, стоит внутри",
+                    "<gray>или выходит (телепорт, сообщение...).",
+                    "<dark_gray>/mgp setup trigger [id]"), true), p -> ops.makeTrigger.run(p));
         set(44, Items.icon(Material.BOOK, "<aqua>Команды", List.of(
                 "<yellow>/mgp setup expand <n> [обратно] [напр.]",
                 "<yellow>/mgp setup contract <n> [обратно] [напр.]",

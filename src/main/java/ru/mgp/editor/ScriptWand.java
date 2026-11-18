@@ -26,6 +26,7 @@ import ru.mgp.session.GameSession;
 import ru.mgp.util.Items;
 import ru.mgp.util.Msg;
 import ru.mgp.util.Pos;
+import ru.mgp.util.Region;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -64,6 +65,41 @@ public final class ScriptWand implements Listener {
     }
 
     public MGPPlugin plugin() { return plugin; }
+
+    /** Выделение игрока (топор, pos1/pos2) в его текущем мире или null — подключает MgpCommand. */
+    private java.util.function.Function<Player, Region> selection = p -> null;
+
+    public void setSelectionSource(java.util.function.Function<Player, Region> f) { this.selection = f; }
+
+    Region selection(Player p) { return selection.apply(p); }
+
+    /**
+     * Новый скрипт-область (type: area) на карте и сразу его редактор. id == null — area1, area2...
+     * mode — REPEAT / ONCE / PER_PLAYER или null (REPEAT).
+     */
+    public void createArea(Player p, String mapId, Region r, String id, String mode) {
+        String[] made = new String[1];
+        boolean[] dup = {false};
+        boolean ok = ScriptStore.edit(plugin, mapId, list -> {
+            if (id != null && ScriptStore.find(list, id) != null) { dup[0] = true; return; }
+            made[0] = id != null ? id : ScriptStore.nextId(list, "area");
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", made[0]);
+            m.put("type", "area");
+            ScriptStore.putArea(m, r);
+            m.put("on", "enter");
+            if (mode != null) m.put("mode", mode.toUpperCase(Locale.ROOT).replace('-', '_'));
+            m.put("actions", new ArrayList<String>());
+            list.add(m);
+        });
+        if (dup[0]) { Msg.send(p, "<red>Скрипт " + Msg.esc(id) + " уже есть — открываю его."); openEditor(p, mapId, id); return; }
+        if (!ok) { Msg.send(p, "<red>Не удалось сохранить карту " + Msg.esc(mapId)); return; }
+        boolean has = false;
+        for (ItemStack it : p.getInventory().getContents()) if (isWand(it)) has = true;
+        if (!has) p.getInventory().addItem(item());
+        Msg.send(p, "<green>Зона-триггер <white>" + made[0] + "</white> (" + ScriptStore.size(r) + ") создана. Добавь, что она делает: «Добавить действие».");
+        openEditor(p, mapId, made[0]);
+    }
 
     private State state(Player p) { return states.computeIfAbsent(p.getUniqueId(), k -> new State()); }
 
@@ -209,7 +245,17 @@ public final class ScriptWand implements Listener {
     private void select(Player p, Block b) {
         MapConfig m = requireMap(p);
         if (m == null) return;
-        Map<String, Object> sc = ScriptStore.findAt(ScriptStore.cached(m), b.getX(), b.getY(), b.getZ());
+        List<Map<String, Object>> all = ScriptStore.cached(m);
+        Map<String, Object> sc = ScriptStore.findAt(all, b.getX(), b.getY(), b.getZ());
+        // клик по блоку внутри зоны-области (или по полу под ней) — её редактор; Shift+ЛКМ — новый скрипт на этом блоке
+        if (sc == null && !p.isSneaking()) for (Map<String, Object> e : all) {
+            Region r = "area".equalsIgnoreCase(ScriptStore.str(e, "type", "")) ? ScriptStore.area(e) : null;
+            if (r != null && (r.contains(b.getX(), b.getY(), b.getZ()) || r.contains(b.getX(), b.getY() + 1, b.getZ()))) {
+                sc = e;
+                p.sendActionBar(Msg.parse("<gray>Это зона <white>" + Msg.esc(String.valueOf(e.get("id"))) + "</white>. Shift+ЛКМ — новый скрипт на блоке"));
+                break;
+            }
+        }
         p.playSound(p.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.4f);
         if (sc != null) {
             openEditor(p, m.id, String.valueOf(sc.get("id")));
@@ -339,6 +385,7 @@ public final class ScriptWand implements Listener {
             case "hold" -> Color.fromRGB(80, 220, 255);
             case "plate" -> Color.fromRGB(90, 230, 90);
             case "zone" -> Color.fromRGB(200, 110, 255);
+            case "area" -> Color.fromRGB(255, 120, 170);
             default -> Color.fromRGB(255, 210, 60);
         };
     }
@@ -347,7 +394,8 @@ public final class ScriptWand implements Listener {
         return switch (type.toLowerCase(Locale.ROOT)) {
             case "hold" -> "Удержание Shift";
             case "plate" -> "Наступить";
-            case "zone" -> "Зона";
+            case "zone" -> "Зона (радиус)";
+            case "area" -> "Зона-область";
             default -> "ПКМ по блоку";
         };
     }
@@ -358,6 +406,25 @@ public final class ScriptWand implements Listener {
         if (b == null || !w.isChunkLoaded(b[0] >> 4, b[2] >> 4)) return;
         String type = ScriptStore.str(sc, "type", "button");
         Color color = selected ? Color.WHITE : typeColor(type);
+        Region area = "area".equalsIgnoreCase(type) ? ScriptStore.area(sc) : null;
+        if (area != null) {
+            // область: полупрозрачный светящийся параллелепипед на всю её величину
+            float sx = area.maxX() - area.minX() + 1, sy = area.maxY() - area.minY() + 1, sz = area.maxZ() - area.minZ() + 1;
+            BlockDisplay box = w.spawn(new Location(w, area.minX(), area.minY(), area.minZ()), BlockDisplay.class, x -> {
+                x.setPersistent(false);
+                x.setVisibleByDefault(false);
+                x.setBlock((selected ? Material.WHITE_STAINED_GLASS : Material.PINK_STAINED_GLASS).createBlockData());
+                x.setTransformation(new Transformation(new Vector3f(0.01f, 0.01f, 0.01f), new AxisAngle4f(), new Vector3f(sx - 0.02f, sy - 0.02f, sz - 0.02f), new AxisAngle4f()));
+                x.setGlowing(true);
+                x.setGlowColorOverride(color);
+                x.setBrightness(new Display.Brightness(15, 15));
+            });
+            show(p, st, box);
+            label(p, st, sc, new Location(w, (area.minX() + area.maxX() + 1) / 2.0 - 0.5, area.maxY() + 0.4, (area.minZ() + area.maxZ() + 1) / 2.0 - 0.5),
+                    color, selected, type, ScriptStore.size(area) + whenText(sc));
+            teleportMarks(p, st, sc, w, color);
+            return;
+        }
         Block block = w.getBlockAt(b[0], b[1], b[2]);
         boolean air = block.getType().isAir() || block.isPassable() && block.getCollisionShape().getBoundingBoxes().isEmpty() && !block.getType().isOccluding();
         Location base = new Location(w, b[0], b[1], b[2]);
@@ -373,10 +440,23 @@ public final class ScriptWand implements Listener {
             x.setBrightness(new Display.Brightness(15, 15));
         });
         show(p, st, d);
-        // подпись
+        String extra = "hold".equalsIgnoreCase(type) ? fmt(ScriptStore.num(sc, "hold", 3)) + " с" : "zone".equalsIgnoreCase(type) ? whenText(sc).trim() : "";
+        label(p, st, sc, base, color, selected, type, extra);
+        teleportMarks(p, st, sc, w, color);
+    }
+
+    /** «, пока внутри», «, при выходе», «, от 2 игроков» — для подписи зоны. */
+    private static String whenText(Map<String, Object> sc) {
+        String on = ScriptStore.str(sc, "on", "enter").toLowerCase(Locale.ROOT);
+        int n = (int) ScriptStore.num(sc, "players", 1);
+        return (on.equals("inside") ? ", пока внутри" : on.equals("leave") ? ", при выходе" : "") + (n > 1 ? ", от " + n + " игроков" : "");
+    }
+
+    private void label(Player p, State st, Map<String, Object> sc, Location base, Color color, boolean selected, String type, String extra) {
+        World w = base.getWorld();
         List<String> acts = ScriptStore.actions(sc);
         String head = (selected ? "<white><bold>" : "<" + hex(color) + "><bold>") + Msg.esc(String.valueOf(sc.get("id"))) + "</bold>";
-        String info = "<gray>" + typeName(type) + ("hold".equalsIgnoreCase(type) ? " " + fmt(ScriptStore.num(sc, "hold", 3)) + " с" : "");
+        String info = "<gray>" + typeName(type) + (extra == null || extra.isBlank() ? "" : " " + extra);
         String what = acts.isEmpty() ? "<red>нет действий" : "<white>" + ActionInfo.shortText(acts.get(0)) + (acts.size() > 1 ? " <gray>+" + (acts.size() - 1) : "");
         TextDisplay t = w.spawn(base.clone().add(0.5, 1.35, 0.5), TextDisplay.class, x -> {
             x.setPersistent(false);
@@ -388,8 +468,11 @@ public final class ScriptWand implements Listener {
             x.setTransformation(new Transformation(new Vector3f(), new AxisAngle4f(), new Vector3f(0.7f, 0.7f, 0.7f), new AxisAngle4f()));
         });
         show(p, st, t);
-        // точки телепорта
-        for (String a : acts) {
+    }
+
+    /** Точки телепорта из действий скрипта: площадка и подпись «сюда телепорт». */
+    private void teleportMarks(Player p, State st, Map<String, Object> sc, World w, Color color) {
+        for (String a : ScriptStore.actions(sc)) {
             Pos to = ActionInfo.teleportTarget(a);
             if (to == null || !w.isChunkLoaded((int) Math.floor(to.x()) >> 4, (int) Math.floor(to.z()) >> 4)) continue;
             Location l = to.toLocation(w);

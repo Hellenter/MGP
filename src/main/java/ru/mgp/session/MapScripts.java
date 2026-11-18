@@ -12,6 +12,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import ru.mgp.config.MapConfig;
 import ru.mgp.config.MapConfig.Script;
+import ru.mgp.config.MapConfig.Trigger;
 import ru.mgp.util.Msg;
 
 import java.util.*;
@@ -25,6 +26,9 @@ import java.util.*;
  *   button — ПКМ по блоку (кнопка, рычаг, люк, любой блок).
  *   plate  — наступить на блок (нажимная плита и т.п.).
  *   zone   — войти в радиус вокруг блока.
+ *   area   — войти в область (параллелепипед min..max из выделения).
+ * У zone и area: on: enter (при входе) | inside (пока внутри, раз в cooldown сек.) | leave (при выходе);
+ * players: N — сработать, только когда внутри одновременно не меньше N игроков (действия — для всех, кто внутри).
  */
 public final class MapScripts {
     /** Шаг обновления в тиках. */
@@ -34,7 +38,10 @@ public final class MapScripts {
     private final Map<UUID, String> holdScript = new HashMap<>();
     private final Map<UUID, Integer> holdTicks = new HashMap<>();
     private final Map<UUID, BossBar> bars = new HashMap<>();
-    private final Map<UUID, Set<String>> inZone = new HashMap<>();
+    /** Кто был внутри зоны/области на прошлом шаге (по id скрипта). */
+    private final Map<String, Set<UUID>> inside = new HashMap<>();
+    /** Зоны, в которых на прошлом шаге было достаточно игроков (players). */
+    private final Set<String> enough = new HashSet<>();
     private final Map<String, Long> cooldownUntil = new HashMap<>();
     private final Set<String> fired = new HashSet<>();
     private final Map<String, Set<UUID>> firedPer = new HashMap<>();
@@ -49,6 +56,12 @@ public final class MapScripts {
 
     private static Location center(World w, Script sc) {
         return new Location(w, sc.block().bx() + 0.5, sc.block().by() + 0.5, sc.block().bz() + 0.5);
+    }
+
+    /** Игрок внутри зоны (радиус) или области (параллелепипед). Для области считается блок ног. */
+    static boolean within(Player p, World w, Script sc) {
+        if (sc.type() == Script.Type.AREA) return p.getWorld() == w && sc.area().contains(p.getLocation());
+        return near(p, center(w, sc), sc.radius());
     }
 
     private static boolean near(Player p, Location c, double radius) {
@@ -78,21 +91,22 @@ public final class MapScripts {
             }
         }
 
-        for (Player p : s.alivePlayers()) {
+        // контур зон и областей частицами (если у скрипта задан particle)
+        if (ticks % 10 == 0) for (Script sc : list) {
+            if (sc.particle() == null || sc.particle().equalsIgnoreCase("none") || !available(sc, null)) continue;
+            if (sc.type() == Script.Type.AREA) outline(w, sc);
+            else if (sc.type() == Script.Type.ZONE) ring(w, sc);
+        }
+
+        List<Player> alive = s.alivePlayers();
+        for (Script sc : list) if (sc.type() == Script.Type.ZONE || sc.type() == Script.Type.AREA) zoneTick(sc, w, alive);
+
+        for (Player p : alive) {
             UUID u = p.getUniqueId();
             Script holdHere = null;
-            Set<String> zonesNow = new HashSet<>();
             for (Script sc : list) {
-                switch (sc.type()) {
-                    case HOLD -> { if (holdHere == null && near(p, center(w, sc), sc.radius())) holdHere = sc; }
-                    case ZONE -> { if (near(p, center(w, sc), sc.radius())) zonesNow.add(sc.id()); }
-                    default -> {}
-                }
+                if (sc.type() == Script.Type.HOLD && near(p, center(w, sc), sc.radius())) { holdHere = sc; break; }
             }
-            // вход в зоны
-            Set<String> before = inZone.getOrDefault(u, Set.of());
-            for (Script sc : list) if (sc.type() == Script.Type.ZONE && zonesNow.contains(sc.id()) && !before.contains(sc.id())) fire(sc, p);
-            if (zonesNow.isEmpty()) inZone.remove(u); else inZone.put(u, zonesNow);
 
             // удержание Shift
             if (holdHere == null || !available(holdHere, p)) {
@@ -118,6 +132,65 @@ public final class MapScripts {
                 p.sendActionBar(Component.empty());
                 fire(holdHere, p);
             }
+        }
+    }
+
+    /** Зона или область: кто вошёл, кто внутри, кто вышел — и сработать по on / players. */
+    private void zoneTick(Script sc, World w, List<Player> alive) {
+        List<Player> now = new ArrayList<>();
+        for (Player p : alive) if (within(p, w, sc)) now.add(p);
+        Set<UUID> before = inside.getOrDefault(sc.id(), Set.of());
+        boolean ok = now.size() >= sc.players(), wasOk = enough.contains(sc.id());
+        switch (sc.on()) {
+            case ENTER -> {
+                if (ok) {
+                    // набралось нужное число — для всех внутри; дальше — для каждого вошедшего
+                    List<Player> who = new ArrayList<>();
+                    for (Player p : now) if (!wasOk || !before.contains(p.getUniqueId())) who.add(p);
+                    fire(sc, who);
+                }
+            }
+            case INSIDE -> { if (ok) fire(sc, now); }
+            case LEAVE -> {
+                List<Player> who = new ArrayList<>();
+                Set<UUID> nowIds = new HashSet<>();
+                for (Player p : now) nowIds.add(p.getUniqueId());
+                for (Player p : alive) if (before.contains(p.getUniqueId()) && !nowIds.contains(p.getUniqueId())) who.add(p);
+                fire(sc, who);
+            }
+        }
+        if (now.isEmpty()) inside.remove(sc.id());
+        else {
+            Set<UUID> ids = new HashSet<>();
+            for (Player p : now) ids.add(p.getUniqueId());
+            inside.put(sc.id(), ids);
+        }
+        if (ok) enough.add(sc.id()); else enough.remove(sc.id());
+    }
+
+    /** Контур низа области частицами (по периметру, не больше ~120 точек). */
+    private void outline(World w, Script sc) {
+        var r = sc.area();
+        double y = r.minY() + 0.1;
+        double x0 = r.minX(), x1 = r.maxX() + 1, z0 = r.minZ(), z1 = r.maxZ() + 1;
+        double per = 2 * ((x1 - x0) + (z1 - z0));
+        double step = Math.max(0.5, per / 120);
+        for (double d = 0; d < per; d += step) {
+            double x, z;
+            if (d < x1 - x0) { x = x0 + d; z = z0; }
+            else if (d < (x1 - x0) + (z1 - z0)) { x = x1; z = z0 + d - (x1 - x0); }
+            else if (d < 2 * (x1 - x0) + (z1 - z0)) { x = x1 - (d - (x1 - x0) - (z1 - z0)); z = z1; }
+            else { x = x0; z = z1 - (d - 2 * (x1 - x0) - (z1 - z0)); }
+            particle(w, sc.particle(), new Location(w, x, y, z), 1, 0);
+        }
+    }
+
+    private void ring(World w, Script sc) {
+        Location c = center(w, sc).add(0, -0.4, 0);
+        int n = (int) Math.max(12, Math.min(64, sc.radius() * 8));
+        for (int i = 0; i < n; i++) {
+            double ang = i * Math.PI * 2 / n;
+            particle(w, sc.particle(), c.clone().add(Math.cos(ang) * sc.radius(), 0, Math.sin(ang) * sc.radius()), 1, 0);
         }
     }
 
@@ -200,18 +273,26 @@ public final class MapScripts {
         return until == null ? 0 : Math.max(0, (until - System.currentTimeMillis() + 999) / 1000);
     }
 
-    private void fire(Script sc, Player p) {
-        if (!available(sc, p)) return;
+    private void fire(Script sc, Player p) { fire(sc, List.of(p)); }
+
+    /** Сработать для нескольких игроков сразу (зона набрала players): «один раз за игру» — один раз для всей группы. */
+    private void fire(Script sc, List<Player> players) {
+        if (players.isEmpty() || sc.mode() == Trigger.Mode.ONCE && fired.contains(sc.id())) return;
+        List<Player> go = new ArrayList<>();
+        for (Player p : players) if (available(sc, p)) go.add(p);
+        if (go.isEmpty()) return;
         fired.add(sc.id());
-        firedPer.computeIfAbsent(sc.id(), k -> new HashSet<>()).add(p.getUniqueId());
-        if (sc.cooldown() > 0) cooldownUntil.put(key(sc, p), System.currentTimeMillis() + sc.cooldown() * 1000L);
-        ActionRunner.run(s, sc.actions(), p);
+        for (Player p : go) {
+            firedPer.computeIfAbsent(sc.id(), k -> new HashSet<>()).add(p.getUniqueId());
+            if (sc.cooldown() > 0) cooldownUntil.put(key(sc, p), System.currentTimeMillis() + sc.cooldown() * 1000L);
+        }
+        for (Player p : go) ActionRunner.run(s, sc.actions(), p);
     }
 
     /** Убрать шкалы прогресса (конец игры, выход игрока). */
     public void clear(Player p) {
         cancelHold(p, false);
-        inZone.remove(p.getUniqueId());
+        for (Set<UUID> in : inside.values()) in.remove(p.getUniqueId());
     }
 
     public void clearAll() {
@@ -222,7 +303,8 @@ public final class MapScripts {
         }
         holdScript.clear();
         holdTicks.clear();
-        inZone.clear();
+        inside.clear();
+        enough.clear();
     }
 
     static void particle(World w, String name, Location at, int count, double spread) {

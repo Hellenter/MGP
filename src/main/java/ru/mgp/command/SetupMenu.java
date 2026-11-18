@@ -144,8 +144,8 @@ final class SetupMenu extends Menu {
             l.add(new Opt("Участок (спавн — где стоишь)", Material.GRASS_BLOCK, List.of("<gray>/mgp setup plot " + id), p -> run(p, "mgp setup plot " + id, false)));
             l.add(new Opt("Стена вручную", Material.BRICKS, List.of("<gray>обычно хватает «авто»", "<gray>/mgp setup wall " + id), p -> run(p, "mgp setup wall " + id, false)));
         }
-        l.add(new Opt("Триггер-область", Material.TRIPWIRE_HOOK, List.of("<gray>спрошу имя в чате; действия — палочкой скриптов", "<gray>" + Msg.esc("/mgp setup trigger " + id + " <имя>")),
-                p -> command.tools().prompt(p, "Имя триггера (латиницей) и режим, если нужно: <yellow>trap once", t -> p.performCommand("mgp setup trigger " + id + " " + t))));
+        l.add(new Opt("Зона-триггер", Material.TRIPWIRE_HOOK, List.of("<gray>из выделения: вход / внутри / выход,", "<gray>действия (телепорт и др.) — в меню", "<gray>" + Msg.esc("/mgp setup trigger " + id + " [id]")),
+                p -> run(p, "mgp setup trigger " + id, false)));
         return l;
     }
 
