@@ -101,7 +101,10 @@ final class Help {
                 l("/mgp panel", "ссылка на админ-панель (в браузере)"),
                 l("/mgp sethub", "спавн хаба там, где стоишь"),
                 l("/mgp hotbar [on|off]", "предметы хаба у себя"),
-                l("/mgp debug solo [on|off]", "играть одному для проверки; /mgp debug <режим> [карта] — что видит плагин"));
+                l("/mgp debug solo [on|off]", "играть одному для проверки; /mgp debug <режим> [карта] — что видит плагин"),
+                l("/mgp bot add [кол-во] [idle|fight|follow]", "тестовые боты рядом; в лобби ожидания — в твою игру"),
+                l("/mgp bot join <режим> [кол-во]", "боты в очередь режима"),
+                l("/mgp bot mode|goto|tp|list|remove", "поведение, идти к тебе, перенести, список, убрать"));
     }
 
     /** Раздел для режима карты. */
@@ -190,7 +193,7 @@ final class Help {
     static List<String> topLevel(CommandSender s) {
         List<String> l = new ArrayList<>(List.of("join", "leave", "menu", "help"));
         if (s.hasPermission("mgp.admin")) l.addAll(List.of("map", "maps", "check", "delete", "setup", "tools", "import", "start", "list", "reload", "panel",
-                "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug"));
+                "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug", "bot"));
         return l;
     }
 
