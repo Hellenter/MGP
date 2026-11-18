@@ -128,6 +128,7 @@ public final class HungerGamesLogic extends GameLogic {
             if (it != null && !it.getType().isAir()) loc.getWorld().dropItemNaturally(loc, it);
         }
         victim.getInventory().clear();
+        session.addDeath(victim.getUniqueId());
         announceDeath(victim, killer);
         victim.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_DEATH, 1f, 1f);
         session.eliminate(victim);

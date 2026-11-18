@@ -545,6 +545,7 @@ public final class GameSession {
         alive.clear();
         alive.addAll(players);
         spawnGroups.clear();
+        plugin.stats().gameStarted(this);
         logic.onStart();
         if (state == State.PLAYING) { objectives.start(); zone.start(); }
         for (Map.Entry<String, String> e : chosenModifiers.entrySet()) {
@@ -828,6 +829,8 @@ public final class GameSession {
             Player w = Bukkit.getPlayer(u);
             if (w != null) names.add(Msg.esc(w.getName()));
         }
+        plugin.stats().gameWon(this, winners);
+        plugin.leaderboards().refresh();
         if (reason != null) broadcast(reason);
         broadcast(names.isEmpty() ? "<yellow>Игра окончена! Победителей нет."
                 : "<gold><bold>Победа:</bold> <yellow>" + String.join(", ", names));
@@ -956,7 +959,15 @@ public final class GameSession {
     public Set<UUID> playerIds() { return Collections.unmodifiableSet(players); }
     public int size() { return players.size(); }
 
-    public void addKill(UUID u) { kills.merge(u, 1, Integer::sum); }
+    public void addKill(UUID u) {
+        kills.merge(u, 1, Integer::sum);
+        if (state == State.PLAYING) plugin.stats().kill(this, u);
+    }
+
+    /** Смерть игрока для статистики (настоящая смерть, выбывание в ГИ, поимка в прятках). */
+    public void addDeath(UUID u) {
+        if (state == State.PLAYING && players.contains(u)) plugin.stats().death(this, u);
+    }
     public int kills(UUID u) { return kills.getOrDefault(u, 0); }
 
     public List<Player> online() {

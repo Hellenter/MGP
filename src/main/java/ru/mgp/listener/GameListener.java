@@ -62,7 +62,10 @@ public final class GameListener implements Listener {
     @EventHandler
     public void onDeath(PlayerDeathEvent e) {
         GameSession s = of(e.getPlayer());
-        if (active(s, e.getPlayer())) s.logic().onDeath(e);
+        if (active(s, e.getPlayer())) {
+            s.addDeath(e.getPlayer().getUniqueId());
+            s.logic().onDeath(e);
+        }
     }
 
     @EventHandler

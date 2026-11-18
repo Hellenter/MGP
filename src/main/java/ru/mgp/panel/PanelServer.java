@@ -139,6 +139,11 @@ public final class PanelServer {
                 send(ex, 200, importMap(b));
                 return;
             }
+            if (p[0].equals("stats")) {
+                Map<String, String> q = query(ex.getRequestURI().getRawQuery());
+                send(ex, 200, sync(() -> stats(method, p, q)));
+                return;
+            }
             JsonElement result = sync(() -> route(method, p, b));
             send(ex, 200, result);
         } catch (ApiException e) {
@@ -194,6 +199,70 @@ public final class PanelServer {
     }
 
     // ------------------------------------------------------------------ API
+
+    private static Map<String, String> query(String raw) {
+        Map<String, String> q = new HashMap<>();
+        if (raw == null || raw.isEmpty()) return q;
+        for (String part : raw.split("&")) {
+            int i = part.indexOf('=');
+            String k = java.net.URLDecoder.decode(i < 0 ? part : part.substring(0, i), StandardCharsets.UTF_8);
+            String v = i < 0 ? "" : java.net.URLDecoder.decode(part.substring(i + 1), StandardCharsets.UTF_8);
+            q.put(k, v);
+        }
+        return q;
+    }
+
+    /**
+     * Статистика игроков (только чтение):
+     * GET /api/stats — режимы, показатели и все игроки (сортировка ?sort=wins&mode=all, ?limit=, ?search=);
+     * GET /api/stats/top?stat=wins&mode=all&limit=10 — топ;
+     * GET /api/stats/player/{ник|uuid} — один игрок по режимам.
+     */
+    private JsonElement stats(String m, String[] p, Map<String, String> q) {
+        if (!m.equals("GET")) throw new ApiException(405, "Только GET");
+        ru.mgp.stats.StatsService st = plugin.stats();
+        String mode = q.getOrDefault("mode", ru.mgp.stats.StatsService.ALL);
+        int limit = 100;
+        try { limit = Math.max(1, Math.min(10000, Integer.parseInt(q.getOrDefault("limit", "100")))); } catch (NumberFormatException ignored) {}
+        if (p.length >= 2 && p[1].equals("top")) {
+            ru.mgp.stats.Stat stat = ru.mgp.stats.Stat.parse(q.getOrDefault("stat", "wins"));
+            if (stat == null) throw new ApiException(400, "Неизвестный показатель");
+            JsonObject o = new JsonObject();
+            o.addProperty("stat", stat.id);
+            o.addProperty("mode", mode);
+            o.add("rows", st.json(st.top(stat, mode, Math.min(limit, 100)), stat));
+            return o;
+        }
+        if (p.length >= 3 && p[1].equals("player")) {
+            ru.mgp.stats.StatsService.PlayerStats ps = st.find(p[2]);
+            if (ps == null) throw new ApiException(404, "Нет статистики игрока");
+            return st.json(ps);
+        }
+        if (p.length > 1) throw new ApiException(404, "Нет такого раздела статистики");
+        ru.mgp.stats.Stat sort = ru.mgp.stats.Stat.parse(q.getOrDefault("sort", "wins"));
+        if (sort == null) sort = ru.mgp.stats.Stat.WINS;
+        final ru.mgp.stats.Stat by = sort;
+        String search = q.getOrDefault("search", "").toLowerCase(Locale.ROOT);
+        List<ru.mgp.stats.StatsService.PlayerStats> all = new ArrayList<>();
+        for (var ps : st.all()) if (search.isEmpty() || ps.name.toLowerCase(Locale.ROOT).contains(search)) all.add(ps);
+        all.sort(Comparator.comparingDouble((ru.mgp.stats.StatsService.PlayerStats ps) -> ps.counts(mode).get(by)).reversed()
+                .thenComparing(ps -> ps.name, String.CASE_INSENSITIVE_ORDER));
+        JsonObject o = new JsonObject();
+        o.add("modes", st.modesJson());
+        JsonArray stats = new JsonArray();
+        for (ru.mgp.stats.Stat s : ru.mgp.stats.Stat.values()) {
+            JsonObject x = new JsonObject();
+            x.addProperty("id", s.id);
+            x.addProperty("name", s.title);
+            stats.add(x);
+        }
+        o.add("stats", stats);
+        o.addProperty("total", all.size());
+        JsonArray players = new JsonArray();
+        for (int i = 0; i < Math.min(limit, all.size()); i++) players.add(st.json(all.get(i)));
+        o.add("players", players);
+        return o;
+    }
 
     private JsonElement route(String m, String[] p, JsonObject body) throws Exception {
         String a = p[0];

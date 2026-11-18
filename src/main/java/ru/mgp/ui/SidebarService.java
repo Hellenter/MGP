@@ -82,6 +82,12 @@ public final class SidebarService {
             ph.put("online", String.valueOf(Bukkit.getOnlinePlayers().size()));
             ph.put("player", Msg.esc(p.getName()));
             for (var m : plugin.registry().modes()) ph.put("players_" + m.id, String.valueOf(plugin.sessions().playersIn(m.id)));
+            var st = plugin.stats().get(p.getUniqueId());
+            var c = st == null ? new ru.mgp.stats.Counts() : st.counts(null);
+            ph.put("wins", String.valueOf(c.wins));
+            ph.put("kills", String.valueOf(c.kills));
+            ph.put("games", String.valueOf(c.played));
+            ph.put("kd", ru.mgp.stats.Stat.KD.format(c.kd()));
         }
         List<net.kyori.adventure.text.Component> out = new ArrayList<>();
         for (String line : lines) out.add(Msg.parse(line, ph));

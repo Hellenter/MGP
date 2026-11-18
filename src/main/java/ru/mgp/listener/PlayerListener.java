@@ -59,6 +59,7 @@ public final class PlayerListener implements Listener {
                 Long t = partyClick.get(p.getUniqueId());
                 if (t == null || System.currentTimeMillis() - t > 300) new ru.mgp.party.PartyMenu(plugin, p).open(p);
             }
+            case Hotbar.STATS -> p.performCommand("stats");
             case Hotbar.LEAVE -> plugin.sessions().leave(p);
             case Hotbar.VOTE -> { if (s != null) VoteMenu.openFor(p, s); }
             case Hotbar.KIT -> { if (s != null) new KitMenu(s, p).open(p); }

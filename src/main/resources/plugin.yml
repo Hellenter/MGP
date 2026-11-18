@@ -26,6 +26,10 @@ commands:
   pc:
     description: Чат пати
     usage: /pc <сообщение>
+  stats:
+    description: Статистика игрока и топы
+    usage: /stats [ник] | top <wins|kills|deaths|played|kd> [режим]
+    aliases: [statistics]
   smp:
     description: Перейти на сервер выживания SMP (нужен мод EAM)
 permissions:
