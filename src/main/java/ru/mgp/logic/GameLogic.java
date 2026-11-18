@@ -120,5 +120,8 @@ public abstract class GameLogic {
     /** Имя набора строк инфо-панели из sidebar.* (null — "playing"). */
     public String sidebarGroup() { return null; }
 
+    /** Не считать игрока AFK (например, прячущийся в прятках может стоять неподвижно). */
+    public boolean afkExempt(Player p) { return false; }
+
     public void onEnd() {}
 }
