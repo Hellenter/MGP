@@ -30,16 +30,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Анти-AFK в матчах: живой игрок идущей игры, который N секунд ничего не делает (не ходит, не крутит камерой,
- * не бьёт, не ставит блоки, не пишет в чат), сначала получает предупреждение, затем отправляется в хаб.
- * Время — config.yml → protection.afk.timeout, режим может задать своё: settings.afk-timeout (0 — выключено).
- * Боты (/mgp bot) и режимы, которые сами просят не трогать игрока (прячущиеся в прятках), не проверяются.
+ * Анти-AFK. Игрок, который N секунд ничего не делает (не ходит, не крутит камерой, не бьёт, не ставит блоки,
+ * не пишет в чат), сначала получает предупреждение, затем:
+ * в игре (живой) — в хаб через protection.afk.timeout (режим может задать своё: settings.afk-timeout, 0 — выкл.);
+ * в лобби ожидания — в хаб, в хабе — отключение от сервера, через protection.afk.lobby-timeout.
+ * Не проверяются: боты, админы (mgp.admin), право mgp.afk.bypass, прячущиеся в прятках, наблюдатели.
  */
 public final class AntiAfk implements Listener {
     private final MGPPlugin plugin;
     /** Последняя активность (мс). Пишется и из асинхронного чата. */
     private final Map<UUID, Long> last = new ConcurrentHashMap<>();
     private final Set<UUID> warned = new HashSet<>();
+    private final Map<UUID, Place> places = new java.util.HashMap<>();
     private BukkitTask task;
 
     public AntiAfk(MGPPlugin plugin) { this.plugin = plugin; }
@@ -52,6 +54,7 @@ public final class AntiAfk implements Listener {
         if (task != null) { task.cancel(); task = null; }
         last.clear();
         warned.clear();
+        places.clear();
     }
 
     private ConfigurationSection cfg() {
@@ -66,46 +69,86 @@ public final class AntiAfk implements Listener {
         return Math.max(0, cfg().getInt("timeout", 90));
     }
 
-    private boolean watched(Player p, GameSession s) {
-        return s != null && s.isPlaying() && s.isAlive(p) && !plugin.bots().isBot(p)
-                && !p.hasPermission("mgp.afk.bypass") && !s.logic().afkExempt(p);
+    /** Таймаут в лобби (хаб и лобби ожидания), сек.; 0 — выключено. */
+    int lobbyTimeout() {
+        if (!cfg().getBoolean("enabled", true)) return 0;
+        return Math.max(0, cfg().getInt("lobby-timeout", 300));
+    }
+
+    private boolean exempt(Player p) {
+        return plugin.bots().isBot(p) || p.hasPermission("mgp.admin") || p.hasPermission("mgp.afk.bypass");
+    }
+
+    /** Где сейчас игрок с точки зрения AFK. */
+    private enum Place { MATCH, WAITING, HUB, NONE }
+
+    private Place place(Player p, GameSession s) {
+        if (s == null) return Place.HUB;
+        return switch (s.state()) {
+            case CREATING, WAITING, STARTING -> Place.WAITING;
+            case PLAYING -> s.isAlive(p) && !s.logic().afkExempt(p) ? Place.MATCH : Place.NONE;
+            default -> Place.NONE; // наблюдатель, конец игры
+        };
     }
 
     private void tick() {
         long now = System.currentTimeMillis();
         Set<UUID> seen = new HashSet<>();
         for (Player p : Bukkit.getOnlinePlayers()) {
+            if (exempt(p)) continue;
             GameSession s = plugin.sessions().of(p);
-            int timeout = s == null ? 0 : timeout(s);
-            if (timeout <= 0 || !watched(p, s)) continue;
+            Place where = place(p, s);
+            int timeout = switch (where) {
+                case MATCH -> timeout(s);
+                case WAITING, HUB -> lobbyTimeout();
+                case NONE -> 0;
+            };
+            if (timeout <= 0) continue;
             UUID u = p.getUniqueId();
             seen.add(u);
+            if (places.put(u, where) != where) { last.put(u, now); warned.remove(u); } // новое место — счёт заново
             long idle = (now - last.computeIfAbsent(u, k -> now)) / 1000;
             int warn = Math.min(Math.max(0, cfg().getInt("warn", 20)), timeout - 1);
+            String outcome = where == Place.HUB ? "отключитесь от сервера" : "вернётесь в лобби";
             if (idle >= timeout) {
-                kick(p, s);
+                kick(p, s, where);
             } else if (warn > 0 && idle >= timeout - warn) {
                 long left = timeout - idle;
                 if (warned.add(u)) {
-                    Msg.title(p, "<red><bold>Вы AFK?", "<yellow>Пошевелитесь, иначе через " + left + " сек. вернётесь в лобби");
+                    Msg.title(p, "<red><bold>Вы AFK?", "<yellow>Пошевелитесь, иначе через " + left + " сек. " + outcome);
                     p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.6f);
                 }
-                p.sendActionBar(Msg.parse("<red>Бездействие: <white>" + left + " сек. <gray>до выхода в лобби"));
+                p.sendActionBar(Msg.parse("<red>Бездействие: <white>" + left + " сек. <gray>— потом " + outcome));
             }
         }
-        // не в игре / погиб / игра закончилась — счёт начнётся заново
+        // сменил место (лобби → игра, погиб, игра закончилась) — счёт начнётся заново
         last.keySet().retainAll(seen);
         warned.retainAll(seen);
+        places.keySet().retainAll(seen);
     }
 
-    private void kick(Player p, GameSession s) {
+    private void kick(Player p, GameSession s, Place where) {
         UUID u = p.getUniqueId();
         last.remove(u);
         warned.remove(u);
-        plugin.getLogger().info("[AFK] " + p.getName() + " отправлен в хаб из игры " + s.mode.id + " #" + s.id);
-        s.broadcast("<gray>" + Msg.esc(p.getName()) + " <yellow>отправлен в лобби за бездействие");
-        plugin.sessions().leave(p);
-        Msg.send(p, "<yellow>Вы слишком долго бездействовали и вернулись в лобби.");
+        switch (where) {
+            case MATCH -> {
+                plugin.getLogger().info("[AFK] " + p.getName() + " отправлен в хаб из игры " + s.mode.id + " #" + s.id);
+                s.broadcast("<gray>" + Msg.esc(p.getName()) + " <yellow>отправлен в лобби за бездействие");
+                plugin.sessions().leave(p);
+                Msg.send(p, "<yellow>Вы слишком долго бездействовали и вернулись в лобби.");
+            }
+            case WAITING -> {
+                plugin.getLogger().info("[AFK] " + p.getName() + " отправлен в хаб из лобби ожидания " + s.mode.id + " #" + s.id);
+                plugin.sessions().leave(p);
+                Msg.send(p, "<yellow>Вы слишком долго бездействовали в лобби ожидания и вернулись в хаб.");
+            }
+            case HUB -> {
+                plugin.getLogger().info("[AFK] " + p.getName() + " отключён за бездействие в хабе");
+                p.kick(Msg.parse("<yellow>Вы отключены за бездействие (AFK)"));
+            }
+            default -> {}
+        }
     }
 
     private void active(Player p) {
@@ -113,7 +156,7 @@ public final class AntiAfk implements Listener {
         if (!last.containsKey(u)) return; // не отслеживается
         last.put(u, System.currentTimeMillis());
         if (Bukkit.isPrimaryThread() && warned.remove(u)) {
-            p.sendActionBar(Msg.parse("<green>Вы снова в игре"));
+            p.sendActionBar(Msg.parse("<green>Отсчёт бездействия сброшен"));
             p.clearTitle();
         }
     }
@@ -155,5 +198,6 @@ public final class AntiAfk implements Listener {
     public void onQuit(PlayerQuitEvent e) {
         last.remove(e.getPlayer().getUniqueId());
         warned.remove(e.getPlayer().getUniqueId());
+        places.remove(e.getPlayer().getUniqueId());
     }
 }
