@@ -82,6 +82,11 @@ public final class MGPPlugin extends JavaPlugin {
         npcs.start();
         bots = new ru.mgp.bot.BotService(this);
         pm.registerEvents(bots, this);
+        antiAfk = new ru.mgp.guard.AntiAfk(this);
+        pm.registerEvents(antiAfk, this);
+        antiAfk.start();
+        antiCheat = new ru.mgp.guard.AntiCheat(this);
+        pm.registerEvents(antiCheat, this);
 
         mapContext = new ru.mgp.command.MapContext(this);
         MgpCommand cmd = new MgpCommand(this);
@@ -116,6 +121,7 @@ public final class MGPPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (bots != null) bots.shutdown(); // до сессий: боты выходят как обычные игроки
+        if (antiAfk != null) antiAfk.shutdown();
         if (mgpCommand != null) mgpCommand.shutdown();
         if (guns != null) guns.shutdown();
         if (wand != null) wand.shutdown();
@@ -181,4 +187,10 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.session.SpawnProtection spawnProtection;
     public ru.mgp.session.SpawnProtection spawnProtection() { return spawnProtection; }
+
+    private ru.mgp.guard.AntiAfk antiAfk;
+    public ru.mgp.guard.AntiAfk antiAfk() { return antiAfk; }
+
+    private ru.mgp.guard.AntiCheat antiCheat;
+    public ru.mgp.guard.AntiCheat antiCheat() { return antiCheat; }
 }

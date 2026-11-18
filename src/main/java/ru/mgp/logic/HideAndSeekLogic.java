@@ -178,6 +178,10 @@ public final class HideAndSeekLogic extends GameLogic {
 
     private boolean isSeeker(Player p) { return roles.get(p.getUniqueId()) == Role.SEEKER; }
 
+    /** Прячущиеся стоят неподвижно, ищущие ждут выхода — не AFK. */
+    @Override
+    public boolean afkExempt(Player p) { return hideLeft > 0 || !isSeeker(p); }
+
     /** В прятках выбрасывать нечего: нож ищущего и предметы режима остаются у игрока. */
     @Override
     public void onDrop(org.bukkit.event.player.PlayerDropItemEvent e) { e.setCancelled(true); }

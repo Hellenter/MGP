@@ -32,3 +32,9 @@ permissions:
   mgp.admin:
     description: Настройка карт, принудительный старт, перезагрузка
     default: op
+  mgp.afk.bypass:
+    description: Не выкидывать из игры за бездействие
+    default: false
+  mgp.anticheat.bypass:
+    description: Не проверять античитом
+    default: false
