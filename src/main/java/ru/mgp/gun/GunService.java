@@ -425,6 +425,15 @@ public final class GunService implements Listener {
     }
 
     /** Нажатие спуска: hold — сколько тиков очередь продолжается без повторного сигнала. */
+    /** Нажатие на курок без клиента (боты): false — в руке не оружие. */
+    public boolean pullTrigger(Player p) {
+        ItemStack it = p.getInventory().getItemInMainHand();
+        GunSpec g = spec(it);
+        if (g == null) return false;
+        trigger(p, it, g, clickHold);
+        return true;
+    }
+
     private void trigger(Player p, ItemStack it, GunSpec g, int hold) {
         Shooter sh = shooter(p);
         if (sh.lastTrigger == now) return; // клик по блоку и в воздух приходят в одном тике

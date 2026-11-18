@@ -78,6 +78,8 @@ public final class MGPPlugin extends JavaPlugin {
         npcs.load();
         pm.registerEvents(npcs, this);
         npcs.start();
+        bots = new ru.mgp.bot.BotService(this);
+        pm.registerEvents(bots, this);
 
         mapContext = new ru.mgp.command.MapContext(this);
         MgpCommand cmd = new MgpCommand(this);
@@ -111,6 +113,7 @@ public final class MGPPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (bots != null) bots.shutdown(); // до сессий: боты выходят как обычные игроки
         if (mgpCommand != null) mgpCommand.shutdown();
         if (guns != null) guns.shutdown();
         if (wand != null) wand.shutdown();
@@ -170,4 +173,7 @@ public final class MGPPlugin extends JavaPlugin {
 
     private ru.mgp.npc.NpcService npcs;
     public ru.mgp.npc.NpcService npcs() { return npcs; }
+
+    private ru.mgp.bot.BotService bots;
+    public ru.mgp.bot.BotService bots() { return bots; }
 }
