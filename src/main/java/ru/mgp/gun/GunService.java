@@ -663,6 +663,7 @@ public final class GunService implements Listener {
             return false;
         }
         st.mag--;
+        plugin.spawnProtection().end(p, true); // выстрел снимает защиту после возрождения
         sh.nextShot = Math.max(sh.nextShot, now - 1) + g.interval();
         if (sh.nextShot < now) sh.nextShot = now;
         boolean aiming = p.isSneaking();

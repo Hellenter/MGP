@@ -794,6 +794,9 @@ public final class GameSession {
     }
 
     /** Игрок выбыл: становится наблюдателем (летает, невидим для живых). */
+    /** Неуязвимость после возрождения на settings.spawn-protection сек. (см. {@link SpawnProtection}). */
+    public void protectSpawn(Player p) { plugin.spawnProtection().protect(p, this); }
+
     public void eliminate(Player p) {
         alive.remove(p.getUniqueId());
         scripts.clear(p);
