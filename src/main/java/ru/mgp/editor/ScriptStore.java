@@ -59,6 +59,27 @@ public final class ScriptStore {
         }
     }
 
+    /** Область скрипта типа area (min/max) или null. */
+    public static ru.mgp.util.Region area(Map<String, Object> e) {
+        try {
+            ru.mgp.util.Pos a = ru.mgp.util.Pos.parse(str(e, "min", null)), b = ru.mgp.util.Pos.parse(str(e, "max", null));
+            return a == null || b == null ? null : ru.mgp.util.Region.of(a, b);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    /** Записать область в скрипт: min, max и точку подписи block (центр низа). */
+    public static void putArea(Map<String, Object> e, ru.mgp.util.Region r) {
+        e.put("min", r.minX() + " " + r.minY() + " " + r.minZ());
+        e.put("max", r.maxX() + " " + r.maxY() + " " + r.maxZ());
+        e.put("block", Math.floorDiv(r.minX() + r.maxX(), 2) + " " + r.minY() + " " + Math.floorDiv(r.minZ() + r.maxZ(), 2));
+    }
+
+    public static String size(ru.mgp.util.Region r) {
+        return (r.maxX() - r.minX() + 1) + "×" + (r.maxY() - r.minY() + 1) + "×" + (r.maxZ() - r.minZ() + 1);
+    }
+
     public static List<String> actions(Map<String, Object> e) {
         List<String> out = new ArrayList<>();
         if (e.get("actions") instanceof List<?> l) for (Object o : l) out.add(String.valueOf(o));

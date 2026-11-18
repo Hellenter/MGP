@@ -33,11 +33,16 @@ public final class MapConfig {
     /**
      * Скриптовый объект карты вместо командных блоков (см. session/MapScripts).
      * type: hold — встать рядом с блоком и держать Shift hold сек.; button — ПКМ по блоку (кнопка, рычаг, люк...);
-     *       plate — наступить на блок (нажимная плита); zone — войти в радиус.
+     *       plate — наступить на блок (нажимная плита); zone — войти в радиус; area — войти в область min..max
+     *       (параллелепипед из выделения). Для zone и area: on — когда срабатывать (enter — вход, inside — пока внутри,
+     *       каждые cooldown сек., leave — выход), players — сколько игроков должно быть внутри одновременно.
+     *       block у area — точка подписи (центр низа области).
      */
     public record Script(String id, Type type, Pos block, double radius, double hold, String hint, String progress,
-                         String particle, int cooldown, Trigger.Mode mode, boolean cancelUse, List<String> actions) {
-        public enum Type { HOLD, BUTTON, PLATE, ZONE }
+                         String particle, int cooldown, Trigger.Mode mode, boolean cancelUse, List<String> actions,
+                         Region area, On on, int players) {
+        public enum Type { HOLD, BUTTON, PLATE, ZONE, AREA }
+        public enum On { ENTER, INSIDE, LEAVE }
     }
 
     public final String id;
@@ -134,19 +139,28 @@ public final class MapConfig {
         }
         for (Map<?, ?> raw : y.getMapList("scripts")) {
             Map<String, Object> m = Cfg.asMap(raw);
-            Pos b = Pos.parse(Cfg.str(m, "block", null));
-            if (b == null) continue;
             Script.Type t = Cfg.enumValue(Script.Type.class, Cfg.str(m, "type", "BUTTON"), Script.Type.BUTTON);
+            Region area = null;
+            if (t == Script.Type.AREA) {
+                Pos a1 = Pos.parse(Cfg.str(m, "min", null)), a2 = Pos.parse(Cfg.str(m, "max", null));
+                if (a1 == null || a2 == null) continue;
+                area = Region.of(a1, a2);
+            }
+            Pos b = Pos.parse(Cfg.str(m, "block", null));
+            if (b == null && area != null) b = new Pos(Math.floorDiv(area.minX() + area.maxX(), 2), area.minY(), Math.floorDiv(area.minZ() + area.maxZ(), 2), 0, 0);
+            if (b == null) continue;
+            Script.On on = Cfg.enumValue(Script.On.class, Cfg.str(m, "on", "ENTER"), Script.On.ENTER);
             scripts.add(new Script(Cfg.str(m, "id", "script" + scripts.size()), t, b,
                     Cfg.dbl(m, "radius", t == Script.Type.ZONE ? 2.0 : 1.8),
                     Cfg.dbl(m, "hold", 3.0),
                     Cfg.str(m, "hint", t == Script.Type.HOLD ? "<yellow>Зажми <gold><bold>SHIFT</bold></gold>, чтобы активировать" : null),
                     Cfg.str(m, "progress", "<aqua>Активация"),
                     Cfg.str(m, "particle", t == Script.Type.HOLD ? "PORTAL" : null),
-                    Cfg.integer(m, "cooldown", t == Script.Type.HOLD ? 1 : 2),
+                    Cfg.integer(m, "cooldown", t == Script.Type.HOLD || on == Script.On.INSIDE ? 1 : 2),
                     Cfg.enumValue(Trigger.Mode.class, Cfg.str(m, "mode", "REPEAT").replace('-', '_'), Trigger.Mode.REPEAT),
                     Cfg.bool(m, "cancel-use", false),
-                    Cfg.strings(m.get("actions"))));
+                    Cfg.strings(m.get("actions")),
+                    area, on, Math.max(1, Cfg.integer(m, "players", 1))));
         }
         for (Map<?, ?> raw : y.getMapList("spawn-points")) {
             Map<String, Object> m = Cfg.asMap(raw);

@@ -8,6 +8,7 @@ import ru.mgp.config.MapConfig;
 import ru.mgp.ui.Menu;
 import ru.mgp.util.Items;
 import ru.mgp.util.Msg;
+import ru.mgp.util.Region;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -20,6 +21,7 @@ final class ScriptEditorMenu extends Menu {
     static final List<String> PARTICLES = List.of("PORTAL", "REVERSE_PORTAL", "END_ROD", "WITCH", "ENCHANT", "SOUL_FIRE_FLAME",
             "FLAME", "HAPPY_VILLAGER", "ELECTRIC_SPARK", "CHERRY_LEAVES", "none");
     private static final List<String> TYPES = List.of("hold", "button", "plate", "zone");
+    private static final List<String> ONS = List.of("enter", "inside", "leave");
     private static final List<String> MODES = List.of("REPEAT", "ONCE", "PER_PLAYER");
     private static final int FIRST_ACTION = 18, ACTION_SLOTS = 27;
 
@@ -34,20 +36,28 @@ final class ScriptEditorMenu extends Menu {
         MapConfig m = wand.plugin().registry().map(mapId);
         Map<String, Object> sc = m == null ? null : ScriptStore.find(ScriptStore.cached(m), id);
         if (sc == null) return;
-        build(sc);
+        build(sc, p);
     }
 
-    private void build(Map<String, Object> sc) {
+    private void build(Map<String, Object> sc, Player p0) {
         String type = ScriptStore.str(sc, "type", "button").toLowerCase(Locale.ROOT);
-        boolean hold = type.equals("hold");
+        boolean hold = type.equals("hold"), area = type.equals("area"), zoneLike = area || type.equals("zone");
         int[] b = ScriptStore.block(sc);
-        String blockStr = b == null ? "?" : b[0] + " " + b[1] + " " + b[2];
+        Region reg = area ? ScriptStore.area(sc) : null;
+        String blockStr = reg != null ? reg.minX() + " " + reg.minY() + " " + reg.minZ() + " .. " + reg.maxX() + " " + reg.maxY() + " " + reg.maxZ()
+                : b == null ? "?" : b[0] + " " + b[1] + " " + b[2];
 
         // ---------- верхний ряд: параметры
         setClick(0, Items.icon(Material.NAME_TAG, "<gold><bold>" + Msg.esc(id), List.of(
-                "<gray>Блок: <white>" + blockStr, "<gray>Карта: <white>" + Msg.esc(mapId), "",
-                "<yellow>ЛКМ <gray>— переименовать", "<yellow>ПКМ <gray>— перенести на другой блок"), false), (p, c) -> {
-            if (c.isRightClick()) {
+                (area ? "<gray>Область: <white>" : "<gray>Блок: <white>") + blockStr, "<gray>Карта: <white>" + Msg.esc(mapId), "",
+                "<yellow>ЛКМ <gray>— переименовать", area ? "<yellow>ПКМ <gray>— перенести (центр низа — на блок)" : "<yellow>ПКМ <gray>— перенести на другой блок"), false), (p, c) -> {
+            if (c.isRightClick() && reg != null) {
+                wand.pick(p, ScriptWand.PickKind.MOVE, "<aqua>ЛКМ палочкой по полу, где должна стоять зона <white>" + id, at -> {
+                    int cx = Math.floorDiv(reg.minX() + reg.maxX(), 2), cz = Math.floorDiv(reg.minZ() + reg.maxZ(), 2);
+                    int dx = at.getBlockX() - cx, dy = at.getBlockY() + 1 - reg.minY(), dz = at.getBlockZ() - cz;
+                    save(p, e -> ScriptStore.putArea(e, new Region(reg.minX() + dx, reg.minY() + dy, reg.minZ() + dz, reg.maxX() + dx, reg.maxY() + dy, reg.maxZ() + dz)), "Зона перенесена");
+                });
+            } else if (c.isRightClick()) {
                 wand.pick(p, ScriptWand.PickKind.MOVE, "<aqua>ЛКМ палочкой по новому блоку для скрипта <white>" + id, at ->
                         save(p, e -> e.put("block", at.getBlockX() + " " + at.getBlockY() + " " + at.getBlockZ()), "Скрипт перенесён"));
             } else {
@@ -66,9 +76,47 @@ final class ScriptEditorMenu extends Menu {
             }
         });
 
-        setClick(2, Items.icon(typeIcon(type), "<white>Срабатывает: <aqua>" + ScriptWand.typeName(type), List.of(
-                "<gray>Удержание Shift / ПКМ по блоку / Наступить / Зона", "", "<yellow>Клик <gray>— следующий вариант"), false),
-                (p, c) -> save(p, e -> e.put("type", cycle(TYPES, type, c.isRightClick())), null));
+        if (area) {
+            set(2, Items.icon(typeIcon(type), "<white>Тип: <aqua>" + ScriptWand.typeName(type), List.of(
+                    "<gray>Игрок внутри параллелепипеда.", "<dark_gray>Тип зоны-области не меняется:", "<dark_gray>удали её и сделай другой скрипт."), false), null);
+            Region sel = wand.selection(p0);
+            List<String> lore = new ArrayList<>(List.of("<gray>Сейчас: <white>" + ScriptStore.size(reg), "<gray>" + blockStr, ""));
+            lore.add(sel != null ? "<yellow>Клик <gray>— заменить на выделение " + ScriptStore.size(sel) : "<dark_gray>Выдели новую область топором,");
+            if (sel == null) lore.add("<dark_gray>потом нажми сюда (/mgp setup wand)");
+            set(4, Items.icon(Material.GOLDEN_AXE, "<white>Область: <aqua>" + ScriptStore.size(reg), lore, false), p -> {
+                Region s2 = wand.selection(p);
+                if (s2 == null) { Msg.send(p, "<red>Нет выделения.</red> <gray>Возьми топор (/mgp setup wand): ЛКМ и ПКМ по углам, затем снова сюда."); return; }
+                save(p, e -> ScriptStore.putArea(e, s2), "Область — " + ScriptStore.size(s2));
+            });
+        } else {
+            setClick(2, Items.icon(typeIcon(type), "<white>Срабатывает: <aqua>" + ScriptWand.typeName(type), List.of(
+                    "<gray>Удержание Shift / ПКМ по блоку / Наступить / Зона", "", "<yellow>Клик <gray>— следующий вариант"), false),
+                    (p, c) -> save(p, e -> e.put("type", cycle(TYPES, type, c.isRightClick())), null));
+        }
+        String on = ScriptStore.str(sc, "on", "enter").toLowerCase(Locale.ROOT);
+        if (zoneLike) {
+            String onName = switch (on) {
+                case "inside" -> "пока игрок внутри";
+                case "leave" -> "когда игрок выходит";
+                default -> "когда игрок входит";
+            };
+            setClick(3, Items.icon(Material.TRIPWIRE_HOOK, "<white>Когда: <aqua>" + onName, List.of(
+                    "<gray>входит — один раз при входе;",
+                    "<gray>внутри — снова и снова, раз в",
+                    "<gray>  «перезарядку» (например, урон, отталкивание);",
+                    "<gray>выходит — при выходе из зоны.", "", "<yellow>Клик <gray>— следующий вариант"), false),
+                    (p, c) -> save(p, e -> {
+                        String next = cycle(ONS, on, c.isRightClick());
+                        e.put("on", next);
+                        if (next.equals("inside") && !e.containsKey("cooldown")) e.put("cooldown", 1);
+                    }, null));
+            int need = (int) ScriptStore.num(sc, "players", 1);
+            setClick(8, Items.icon(Material.PLAYER_HEAD, "<white>Игроков внутри: <aqua>" + (need <= 1 ? "хватит одного" : "не меньше " + need), List.of(
+                    "<gray>Сработает, только когда в зоне", "<gray>одновременно столько игроков.",
+                    "<gray>Действия — для всех, кто внутри", "<gray>(например, лифт для группы).", "",
+                    "<yellow>ЛКМ <gray>+1  <yellow>ПКМ <gray>−1"), false),
+                    (p, c) -> save(p, e -> { int v = (int) clamp(need + (c.isRightClick() ? -1 : 1), 1, 100); if (v <= 1) e.remove("players"); else e.put("players", v); }, null));
+        }
 
         if (hold) {
             double h = ScriptStore.num(sc, "hold", 3);
@@ -81,9 +129,9 @@ final class ScriptEditorMenu extends Menu {
             setClick(4, Items.icon(Material.COMPASS, "<white>Радиус: <aqua>" + ScriptWand.fmt(r) + " бл.", numLore("0.5", "2"), false),
                     (p, c) -> save(p, e -> e.put("radius", clamp(r + step(c, 0.5, 2), 0.5, 16)), null));
         }
-        int defCd = hold ? 1 : 2;
+        int defCd = hold || on.equals("inside") ? 1 : 2;
         int cd = (int) ScriptStore.num(sc, "cooldown", defCd);
-        setClick(5, Items.icon(Material.HOPPER, "<white>Перезарядка: <aqua>" + cd + " с", numLore("1", "10"), false),
+        setClick(5, Items.icon(Material.HOPPER, zoneLike && on.equals("inside") ? "<white>Повтор каждые: <aqua>" + cd + " с" : "<white>Перезарядка: <aqua>" + cd + " с", numLore("1", "10"), false),
                 (p, c) -> save(p, e -> e.put("cooldown", (int) clamp(cd + step(c, 1, 10), 0, 3600)), null));
 
         String mode = ScriptStore.str(sc, "mode", "REPEAT").toUpperCase(Locale.ROOT).replace('-', '_');
@@ -95,9 +143,9 @@ final class ScriptEditorMenu extends Menu {
         setClick(6, Items.icon(Material.REPEATER, "<white>Срабатывает: <aqua>" + modeName, List.of("", "<yellow>Клик <gray>— следующий вариант"), false),
                 (p, c) -> save(p, e -> e.put("mode", cycle(MODES, mode, c.isRightClick())), null));
 
-        if (hold || type.equals("zone")) {
+        if (hold || zoneLike) {
             String part = ScriptStore.str(sc, "particle", hold ? "PORTAL" : "none");
-            setClick(7, Items.icon(Material.BLAZE_POWDER, "<white>Частицы: <aqua>" + part, List.of("<gray>Крутятся вокруг блока", "", "<yellow>Клик <gray>— следующие"), false),
+            setClick(7, Items.icon(Material.BLAZE_POWDER, "<white>Частицы: <aqua>" + part, List.of(hold ? "<gray>Крутятся вокруг блока" : "<gray>Граница зоны на полу (в игре)", "", "<yellow>Клик <gray>— следующие"), false),
                     (p, c) -> save(p, e -> e.put("particle", cycle(PARTICLES, part, c.isRightClick())), null));
         }
         if (hold) {
@@ -196,6 +244,7 @@ final class ScriptEditorMenu extends Menu {
             case "hold" -> Material.ENDER_EYE;
             case "plate" -> Material.STONE_PRESSURE_PLATE;
             case "zone" -> Material.LIME_STAINED_GLASS;
+            case "area" -> Material.PINK_STAINED_GLASS;
             default -> Material.STONE_BUTTON;
         };
     }

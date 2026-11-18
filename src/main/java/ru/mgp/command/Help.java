@@ -56,7 +56,7 @@ final class Help {
                 l("/mgp setup clearsel", "убрать выделение"),
                 l("/mgp setup zone [clear]", "play-зона из выделения: за неё не выйти"),
                 l("/mgp setup teamzone <команда> [clear]", "стартовая зона команды; teamzone open <сек> — когда открывается"),
-                l("/mgp setup trigger <имя> [once|per_player|repeat]", "триггер-область (действия — в файле карты или палочкой)"));
+                l("/mgp setup trigger [id] [once|per_player|repeat]", "зона-триггер из выделения: вход / внутри / выход, действия — в меню"));
         section("hg", "Голодные игры",
                 l("/mgp setup spawn", "спавны на пьедесталах (по одному на игрока)"),
                 l("/mgp setup center [auto|размер]", "центр барьера; auto — по спавнам, размер — ширина барьера"),
