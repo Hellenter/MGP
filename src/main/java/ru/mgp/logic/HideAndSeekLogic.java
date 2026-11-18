@@ -470,6 +470,7 @@ public final class HideAndSeekLogic extends GameLogic {
 
     private void caught(Player hider, Player seeker) {
         UUID u = hider.getUniqueId();
+        session.addDeath(u);
         undisguise(u);
         if (seeker != null) {
             session.addKill(seeker.getUniqueId());

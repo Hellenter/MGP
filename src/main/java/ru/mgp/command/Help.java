@@ -94,6 +94,13 @@ final class Help {
                 l("/mgp gun [menu|give|ammo|list]", "оружие и патроны; /mgp pack load|unload — ресурспак"),
                 l("/mgp arrow [кол-во] [тип]", "разрывные стрелы"),
                 l("/mgp setup trader <набор сделок> [профессия]", "житель-торговец на карте"));
+        section("stats", "Статистика и топы",
+                l("/stats [ник]", "статистика игрока по режимам (меню)"),
+                l("/stats top <wins|kills|deaths|played|kd> [режим]", "топ-10 в чат"),
+                l("/mgp lb add <wins|kills|deaths|played|kd> [режим|all] [строк]", "голограмма-топ там, где стоишь (обычно в хабе)"),
+                l("/mgp lb move|remove [id]", "перенести сюда / убрать (без id — ближайшую)"),
+                l("/mgp lb list", "все голограммы"),
+                l("/stats reset <ник> [режим]", "обнулить статистику игрока"));
         section("server", "Сервер",
                 l("/mgp start", "запустить игру в лобби ожидания сейчас"),
                 l("/mgp list", "идущие игры"),
@@ -193,7 +200,7 @@ final class Help {
     static List<String> topLevel(CommandSender s) {
         List<String> l = new ArrayList<>(List.of("join", "leave", "menu", "help"));
         if (s.hasPermission("mgp.admin")) l.addAll(List.of("map", "maps", "check", "delete", "setup", "tools", "import", "start", "list", "reload", "panel",
-                "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug", "bot"));
+                "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug", "bot", "lb"));
         return l;
     }
 

@@ -230,6 +230,7 @@ public final class MgpCommand implements TabExecutor {
                 ru.mgp.npc.NpcCommands.handle(plugin, p, a);
             }
             case "bot", "bots" -> { if (admin(sender)) ru.mgp.bot.BotCommands.handle(plugin, sender, a); }
+            case "lb", "leaderboard", "top" -> { if (admin(sender)) ru.mgp.stats.StatsCommand.leaderboard(plugin, sender, a); }
             case "wand" -> {
                 if (!admin(sender)) return true;
                 if (!(sender instanceof Player p)) { Msg.send(sender, "Только в игре."); return true; }
@@ -1782,7 +1783,9 @@ public final class MgpCommand implements TabExecutor {
         } else if (name.equals("mgp")) {
             if (a.length == 1) {
                 out.addAll(List.of("join", "leave", "menu", "help"));
-                if (s.hasPermission("mgp.admin")) out.addAll(List.of("map", "check", "setup", "tools", "import", "maps", "delete", "start", "list", "reload", "panel", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug", "bot"));
+                if (s.hasPermission("mgp.admin")) out.addAll(List.of("map", "check", "setup", "tools", "import", "maps", "delete", "start", "list", "reload", "panel", "optimize", "rename", "sethub", "hotbar", "wand", "shop", "kit", "npc", "arrow", "gun", "pack", "debug", "bot", "lb"));
+            } else if (a.length >= 2 && a[0].equalsIgnoreCase("lb") && s.hasPermission("mgp.admin")) {
+                out.addAll(ru.mgp.stats.StatsCommand.leaderboardTab(plugin, a));
             } else if (a.length >= 2 && a[0].equalsIgnoreCase("bot") && s.hasPermission("mgp.admin")) {
                 out.addAll(ru.mgp.bot.BotCommands.tab(plugin, a));
             } else if (a.length == 2 && (a[0].equalsIgnoreCase("help") || a[0].equals("?"))) {

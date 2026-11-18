@@ -82,6 +82,11 @@ public final class MGPPlugin extends JavaPlugin {
         npcs.start();
         bots = new ru.mgp.bot.BotService(this);
         pm.registerEvents(bots, this);
+        stats = new ru.mgp.stats.StatsService(this);
+        stats.load();
+        pm.registerEvents(stats, this);
+        leaderboards = new ru.mgp.stats.Leaderboards(this, stats);
+        leaderboards.load();
         antiAfk = new ru.mgp.guard.AntiAfk(this);
         pm.registerEvents(antiAfk, this);
         antiAfk.start();
@@ -103,6 +108,9 @@ public final class MGPPlugin extends JavaPlugin {
         ru.mgp.friend.FriendCommand friendCmd = new ru.mgp.friend.FriendCommand(this);
         PluginCommand fc = getCommand("friend");
         if (fc != null) { fc.setExecutor(friendCmd); fc.setTabCompleter(friendCmd); }
+        ru.mgp.stats.StatsCommand statsCmd = new ru.mgp.stats.StatsCommand(this);
+        PluginCommand sc = getCommand("stats");
+        if (sc != null) { sc.setExecutor(statsCmd); sc.setTabCompleter(statsCmd); }
         ServerCommand serverCmd = new ServerCommand(this);
         for (String name : new String[]{"server", "smp"}) {
             PluginCommand c = getCommand(name);
@@ -110,6 +118,8 @@ public final class MGPPlugin extends JavaPlugin {
         }
 
         sessions.start();
+        stats.start();
+        leaderboards.start();
         panel = new PanelServer(this);
         panel.start();
         // на случай /reload: вернуть всех онлайн-игроков в хаб
@@ -128,6 +138,8 @@ public final class MGPPlugin extends JavaPlugin {
         if (npcs != null) npcs.shutdown();
         if (panel != null) panel.stop();
         if (sessions != null) sessions.shutdown();
+        if (leaderboards != null) leaderboards.shutdown();
+        if (stats != null) stats.shutdown(); // после сессий: их итоги уже записаны
     }
 
     /**
@@ -149,6 +161,7 @@ public final class MGPPlugin extends JavaPlugin {
         if (guns != null) guns.load();
         shops.load();
         if (npcs != null) npcs.load();
+        if (leaderboards != null) leaderboards.load();
     }
 
     public WorldService worlds() { return worlds; }
@@ -188,6 +201,11 @@ public final class MGPPlugin extends JavaPlugin {
     private ru.mgp.session.SpawnProtection spawnProtection;
     public ru.mgp.session.SpawnProtection spawnProtection() { return spawnProtection; }
 
+    private ru.mgp.stats.StatsService stats;
+    public ru.mgp.stats.StatsService stats() { return stats; }
+
+    private ru.mgp.stats.Leaderboards leaderboards;
+    public ru.mgp.stats.Leaderboards leaderboards() { return leaderboards; }
     private ru.mgp.guard.AntiAfk antiAfk;
     public ru.mgp.guard.AntiAfk antiAfk() { return antiAfk; }
 

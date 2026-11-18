@@ -10,7 +10,7 @@ import ru.mgp.vote.Vote;
 
 /** Служебные предметы в хотбаре. Нажатия обрабатывает PlayerListener по метке предмета. */
 public final class Hotbar {
-    public static final String PARTY = "party";
+    public static final String PARTY = "party", STATS = "stats";
     public static final String SELECTOR = "selector", VOTE = "vote", KIT = "kit", LEAVE = "leave", AGAIN = "again";
 
     private Hotbar() {}
@@ -52,6 +52,9 @@ public final class Hotbar {
         int ps = MGPPlugin.getPlugin(MGPPlugin.class).getConfig().getInt("party.hotbar-slot", 8);
         if (ps >= 1 && ps <= 8 && inv.getItem(ps) == null)
             inv.setItem(ps, tagged(Material.PLAYER_HEAD, "<aqua><bold>Пати</bold> <gray>(ПКМ)", PARTY));
+        int ss = MGPPlugin.getPlugin(MGPPlugin.class).getConfig().getInt("stats.hotbar-slot", 7);
+        if (ss >= 1 && ss <= 8 && inv.getItem(ss) == null)
+            inv.setItem(ss, tagged(Material.WRITABLE_BOOK, "<gold><bold>Статистика</bold> <gray>(ПКМ)", STATS));
         inv.setHeldItemSlot(0);
     }
 
