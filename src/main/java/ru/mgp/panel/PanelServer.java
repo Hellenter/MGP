@@ -48,12 +48,16 @@ public final class PanelServer {
             "svg", "image/svg+xml", "webmanifest", "application/manifest+json");
 
     private final MGPPlugin plugin;
+    private final PanelActions actions;
     private final Gson gson = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
     private HttpServer server;
     private ExecutorService pool;
     private String token;
 
-    public PanelServer(MGPPlugin plugin) { this.plugin = plugin; }
+    public PanelServer(MGPPlugin plugin) {
+        this.plugin = plugin;
+        this.actions = new PanelActions(plugin);
+    }
 
     // ------------------------------------------------------------------ запуск
 
@@ -269,6 +273,24 @@ public final class PanelServer {
         switch (a) {
             case "ping": return Json.obj("ok", true);
             case "overview": return overview();
+            case "admin": return actions.snapshot();
+            case "players": {
+                if (p.length == 1) return actions.players();
+                need(p.length == 3 && m.equals("POST"), "Ожидалось POST /api/players/<ник>/hub|kick|join|message");
+                try {
+                    return actions.player(p[1], p[2], body);
+                } catch (IllegalArgumentException e) {
+                    throw new ApiException(400, e.getMessage());
+                }
+            }
+            case "broadcast": {
+                need(m.equals("POST"), "Ожидалось POST /api/broadcast");
+                try {
+                    return actions.broadcast(body);
+                } catch (IllegalArgumentException e) {
+                    throw new ApiException(400, e.getMessage());
+                }
+            }
             case "meta": return meta();
             case "reload":
                 plugin.reloadAll();
